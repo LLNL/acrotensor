@@ -27,9 +27,9 @@ To gain access to the Acrotensor objects be sure to include `AcroTensor.hpp` and
 ```
 //Start of an example contraction that will add 1000 random matrices together on the GPU
 std::vector<int> dims {1000, 3, 3};
-acrobatic::Tensor A(dims);    //1000x3x3 entry tensor
-acrobatic::Tensor B(1000);    //1000 entry tensor
-acrobatic::Tensor S(3,3);     //3x3 tensor
+acro::Tensor A(dims);    //1000x3x3 entry tensor
+acro::Tensor B(1000);    //1000 entry tensor
+acro::Tensor S(3,3);     //3x3 tensor
 ```
 
 Once the tensors are created they can be accessed on the CPU with Tensor indexing using the `()` operator and linear indexing using the `[]` operator.  The data in the tensors are layed out linearly with the most significant index on the left.  There are also utility methods such as `Set()` and `Print()`:
@@ -57,7 +57,7 @@ S.SwitchToGPU();  //Indicate that the GPU has the fresh copy without copying the
 
 Tensor contractions can now be handled through a `TensorEngine` object.  Thesor engines can be initilized with different execution policies that can handle contractions on the CPU or GPU with different approaches.  The contraction string in the `[]` operator defines how the tensors will be indexed, multiplied and added.  The dimensions of the contraction operation are set by the dimensions of the tensors that are passed in via the `()` operator.  Any index that does not appear on the left hand side is sum across and contracted away in the ouput tensor.
 ```
-acrobatic::TensorEngine TE("OneOutPerThread");  //Initilize the engine with the OneOutPerThread exec policy
+acro::TensorEngine TE("OneOutPerThread");  //Initilize the engine with the OneOutPerThread exec policy
 TE["S_i_j = A_n_i_j B_n"](S, A, B);             //Contract on n and sum the 1000 matrices into 1
 TE["S_i_j = A_n_i_j"](S, A);                    //Same result as before since n is still contracted
 
