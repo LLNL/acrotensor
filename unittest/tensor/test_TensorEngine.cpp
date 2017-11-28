@@ -41,6 +41,12 @@ TEST_CASE("TensorEngine", "[TensorEngine]")
          TensorEngine TE("SMChunkPerBlock");
          test_suite_on_gpu_engine(TE);
       }
+
+      SECTION("MultiOutPerThreadExecutor")
+      {
+         TensorEngine TE("MultiOutPerThread");
+         test_suite_on_gpu_engine(TE);
+      }      
    } 
 }
 

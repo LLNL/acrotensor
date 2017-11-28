@@ -106,14 +106,13 @@ CudaKernel *MultiOutPerThreadExecutor::GenerateCudaKernel()
     //Decide on the number of loops of the 3 types
     int num_inner_loops = Kernel.GetNumContractionLoops();
     int num_outer_loops, num_middle_loops;
-    num_outer_loops = num_loops - num_inner_loops - 0;
-    // for (num_outer_loops = 0; num_outer_loops < num_loops - num_inner_loops; ++num_outer_loops)
-    // {
-    //     if (Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops) > 100*num_mp*blocks_per_mp)
-    //     {
-    //         break;
-    //     } 
-    // }
+    for (num_outer_loops = 0; num_outer_loops < num_loops - num_inner_loops; ++num_outer_loops)
+    {
+        if (Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops) > 100*num_mp*blocks_per_mp)
+        {
+            break;
+        } 
+    }
     num_middle_loops = num_loops - num_inner_loops - num_outer_loops;
     int outeridx_size = Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops);
     int mididx_size = Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops + num_middle_loops) / outeridx_size;

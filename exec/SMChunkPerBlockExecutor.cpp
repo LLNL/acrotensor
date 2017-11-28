@@ -208,7 +208,7 @@ void SMChunkPerBlockExecutor::GetLoopingStructure(int &block_size, int &num_oute
             thread_waste = t_thread_waste;
         }
     }
-    std::cout << thread_waste << ", " << block_size << ", " << num_outer_loops << ", " << num_middle_loops << ", " << num_inner_loops << std::endl;
+    //std::cout << thread_waste << ", " << block_size << ", " << num_outer_loops << ", " << num_middle_loops << ", " << num_inner_loops << std::endl;
 }
 
 //Gets offsets for each indexed 
