@@ -97,6 +97,9 @@ class TensorKernel
     //The number of index combinations in a given variable in the kernel (vari=-1 for output)
     int GetVarSize(int vari);
 
+    //The highes loop number that the var varies by (vari=-1 for output)
+    int GetVarLoopDepth(int vari);
+
     //Information for the inner loops
     int GetVarStorageReqForInnerLoops(int vari, int num_loops);
     int GetInputStorageReqForInnerLoops(int num_loops);

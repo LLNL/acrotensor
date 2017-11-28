@@ -106,13 +106,14 @@ CudaKernel *MultiOutPerThreadExecutor::GenerateCudaKernel()
     //Decide on the number of loops of the 3 types
     int num_inner_loops = Kernel.GetNumContractionLoops();
     int num_outer_loops, num_middle_loops;
-    for (num_outer_loops = 0; num_outer_loops < num_loops - num_inner_loops; ++num_outer_loops)
-    {
-        if (Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops) > 10*num_mp*blocks_per_mp)
-        {
-            break;
-        } 
-    }
+    num_outer_loops = num_loops - num_inner_loops - 0;
+    // for (num_outer_loops = 0; num_outer_loops < num_loops - num_inner_loops; ++num_outer_loops)
+    // {
+    //     if (Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops) > 100*num_mp*blocks_per_mp)
+    //     {
+    //         break;
+    //     } 
+    // }
     num_middle_loops = num_loops - num_inner_loops - num_outer_loops;
     int outeridx_size = Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops);
     int mididx_size = Kernel.GetIdxSizeForFirstNumLoops(num_outer_loops + num_middle_loops) / outeridx_size;
@@ -139,17 +140,16 @@ CudaKernel *MultiOutPerThreadExecutor::GenerateCudaKernel()
     "    int tidx = (blockIdx.x*blockDim.x + threadIdx.x);\n"
     "    int outidx = tidx*<MIDIDX_SIZE>;\n"
     "    if (tidx < <TIDX_SIZE>) {\n"
-    "        sum = 0.0;\n"
             "<COMPUTE_IOUTER>"
-    "        int mididx = 0;\n"
             "<MIDLOOPS>"
-    "            ++mididx;\n"
+    "            sum = 0.0;\n"
                 "<CONTLOOPS>"
     "                rhs_val = 1.0;\n"
                     "<COMPUTE_RHS>"
     "                sum += rhs_val;\n"
                 "<ENDCONTLOOPS>"
-    "            dout[outidx + mididx] <OUT_EQ_OP> sum;\n"
+    "            dout[outidx] <OUT_EQ_OP> sum;\n"
+    "            ++outidx;\n"
             "<ENDMIDLOOPS>"
     "    }\n"
     "}\n";
@@ -187,10 +187,30 @@ CudaKernel *MultiOutPerThreadExecutor::GenerateCudaKernel()
 
     //Generate the unrolled I computation
     std::string midLoops;
+    std::vector<bool> hoisted(Kernel.GetNumInputVars(), false);
     for (int loopd = num_outer_loops; loopd < num_outer_loops + num_middle_loops; ++loopd)
     {
         std::string temp;
-        //temp += "            #pragma unroll\n";
+        for (int ivari = 0; ivari < Kernel.GetNumInputVars(); ++ ivari)
+        {
+            if (Kernel.GetVarLoopDepth(ivari) < loopd && !hoisted[ivari])
+            {
+                std::string ivaristr = std::to_string(ivari);
+                std::string varidxstr = "I[" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "]*" +
+                                        std::to_string(Kernel.GetVarDimStride(ivari, 0));
+                for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
+                {
+                    varidxstr += " + ";
+                    varidxstr += "I[" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "]*" +
+                                 std::to_string(Kernel.GetVarDimStride(ivari, d));
+                }               
+
+                temp += "        double din" + ivaristr + " = __ldg(&din[" + ivaristr + "][" + varidxstr + "]);\n";
+                hoisted[ivari] = true;
+            }
+        }
+
+        temp += "        #pragma unroll\n";
         temp += "        for (I[<LOOPD>] = 0; I[<LOOPD>] < <LOOP_SIZE>; ++I[<LOOPD>]) {\n";
         str_replace_all(temp, "<LOOPD>", loopd);
         str_replace_all(temp, "<LOOP_SIZE>", Kernel.GetLoopDim(loopd));
@@ -203,13 +223,32 @@ CudaKernel *MultiOutPerThreadExecutor::GenerateCudaKernel()
     for (int loopd = num_middle_loops + num_outer_loops; loopd < num_loops; ++loopd)
     {
         std::string temp;
-        temp += "            #pragma unroll\n";
-        temp += "            for (I[<LOOPD>] = 0; I[<LOOPD>] < <LOOP_SIZE>; ++I[<LOOPD>]) {\n";
+        for (int ivari = 0; ivari < Kernel.GetNumInputVars(); ++ ivari)
+        {
+            if (Kernel.GetVarLoopDepth(ivari) < loopd && !hoisted[ivari])
+            {
+                std::string ivaristr = std::to_string(ivari);
+                std::string varidxstr = "I[" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "]*" +
+                                        std::to_string(Kernel.GetVarDimStride(ivari, 0));
+                for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
+                {
+                    varidxstr += " + ";
+                    varidxstr += "I[" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "]*" +
+                                 std::to_string(Kernel.GetVarDimStride(ivari, d));
+                }               
+
+                temp += "        double din" + ivaristr + " = __ldg(&din[" + ivaristr + "][" + varidxstr + "]);\n";
+                hoisted[ivari] = true;
+            }
+        }
+
+        temp += "        #pragma unroll\n";
+        temp += "        for (I[<LOOPD>] = 0; I[<LOOPD>] < <LOOP_SIZE>; ++I[<LOOPD>]) {\n";
         str_replace_all(temp, "<LOOPD>", loopd);
         str_replace_all(temp, "<LOOP_SIZE>", Kernel.GetLoopDim(loopd));
         contLoops += temp;
-    }    
-    std::string endContLoops = "            " + std::string(num_inner_loops, '}') + "\n";
+    }
+    std::string endContLoops = "        " + std::string(num_inner_loops, '}') + "\n";
 
     //Generate the RHS computation
     std::string computeRHSStr;
@@ -242,8 +281,8 @@ CudaKernel *MultiOutPerThreadExecutor::GenerateCudaKernel()
     str_replace_all(cuda_kernel->Code, "<COMPUTE_RHS>", computeRHSStr);
     str_replace_all(cuda_kernel->Code, "<OUT_EQ_OP>", Kernel.EqOperator);
 
-    std::cout << Kernel.KernelStr << std::endl;
-    std::cout << cuda_kernel->Code << std::endl;
+    //std::cout << Kernel.KernelStr << std::endl;
+    //std::cout << cuda_kernel->Code << std::endl;
     cuda_kernel->GenerateFunction();
 
     return cuda_kernel;

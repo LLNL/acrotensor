@@ -132,13 +132,13 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
     "extern \"C\"  \n"
     "__global__ void <KERNEL_NAME>(double *dout, double **din)\n"
     "{\n"
-    "    int I[<NUMLOOPS>];\n"
     "    double rhs_val;\n"
     "    double sum;\n"
     "    int outidx = (blockIdx.x*blockDim.x + threadIdx.x);\n"
     "    if (outidx < <OUTIDX_SIZE>) {\n"
     "        sum = 0.0;\n"
             "<COMPUTE_IOUT>"
+    "\n"
             "<CONTLOOPS>"
     "            rhs_val = 1.0;\n"
                 "<COMPUTE_RHS>"
@@ -162,7 +162,7 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
     {
         //I[loopd] = (outidx / (Wout[loopd]) % N[loopd];
         computeIOutStr += "        ";
-        computeIOutStr += "I[" + std::to_string(loopd) + "] = ";
+        computeIOutStr += "int I" + std::to_string(loopd) + " = ";
         if (Wout[loopd] == 1)
         {
             computeIOutStr += "outidx";
@@ -181,31 +181,58 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
 
     //Generate the unrolled I computation
     std::string contLoops;
+    std::vector<bool> hoisted(Kernel.GetNumInputVars(), false);
     for (int loopd = numoutloops; loopd < numloops; ++loopd)
     {
         std::string temp;
+        for (int ivari = 0; ivari < Kernel.GetNumInputVars(); ++ ivari)
+        {
+            if (Kernel.GetVarLoopDepth(ivari) < loopd && !hoisted[ivari])
+            {
+                std::string ivaristr = std::to_string(ivari);
+                std::string varidxstr = "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "*" +
+                                        std::to_string(Kernel.GetVarDimStride(ivari, 0));
+                for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
+                {
+                    varidxstr += " + ";
+                    varidxstr += "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "*" +
+                                 std::to_string(Kernel.GetVarDimStride(ivari, d));
+                }               
+
+                temp += "        double din" + ivaristr + " = __ldg(&din[" + ivaristr + "][" + varidxstr + "]);\n";
+                hoisted[ivari] = true;
+            }
+        }
+
         temp += "        #pragma unroll\n";
-        temp += "        for (I[<LOOPD>] = 0; I[<LOOPD>] < <LOOP_SIZE>; ++I[<LOOPD>]) {\n";
+        temp += "        for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {\n";
         str_replace_all(temp, "<LOOPD>", loopd);
         str_replace_all(temp, "<LOOP_SIZE>", Kernel.GetLoopDim(loopd));
         contLoops += temp;
-    }    
+    }
     std::string endContLoops = "        " + std::string(numcontloops, '}') + "\n";
 
     //Generate the RHS computation
-    std::string computeRHSStr;
+    std::string computeRHSStr;  
     for (int ivari = 0; ivari < numinvars; ++ ivari)
     {
-        computeRHSStr += "            rhs_val *= __ldg(&din[" + std::to_string(ivari) + "][";
-        computeRHSStr += "I[" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "]*" +
-                          std::to_string(Kernel.GetVarDimStride(ivari, 0));
-        for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
+        if (hoisted[ivari])
         {
-            computeRHSStr += " + ";
-            computeRHSStr += "I[" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "]*" +
-                              std::to_string(Kernel.GetVarDimStride(ivari, d));
+            computeRHSStr += "            rhs_val *= din" + std::to_string(ivari) + ";\n";
         }
-        computeRHSStr += "]);\n";
+        else
+        {
+            computeRHSStr += "            rhs_val *= __ldg(&din[" + std::to_string(ivari) + "][";
+            computeRHSStr += "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "*" +
+                              std::to_string(Kernel.GetVarDimStride(ivari, 0));                         
+            for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
+            {
+                computeRHSStr += " + ";
+                computeRHSStr += "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "*" +
+                                  std::to_string(Kernel.GetVarDimStride(ivari, d));                                   
+            }
+            computeRHSStr += "]);\n";
+        }
     }
 
     str_replace_all(cuda_kernel->Code, "<KERNEL_NAME>", cuda_kernel->FunctionName);

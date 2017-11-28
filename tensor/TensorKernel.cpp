@@ -376,6 +376,8 @@ int TensorKernel::GetVarDimStride(int vari, int dim)
 
 int TensorKernel::GetVarSize(int vari)
 {
+    ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
+
     int rank = GetVarRank(vari);
     int size = 1;
     for (int d = 0; d < rank; ++d)
@@ -385,6 +387,21 @@ int TensorKernel::GetVarSize(int vari)
     return size;
 }
 
+
+int TensorKernel::GetVarLoopDepth(int vari)
+{
+    ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
+
+    int depth = -1; //Invariant to all loops
+    for (int loopd = 0; loopd < GetNumLoops(); ++ loopd)
+    {
+        if (IsVarDependentOnLoop(vari, loopd))
+        {
+            depth = loopd;
+        }
+    }
+    return depth;
+}
 
 int TensorKernel::GetVarStorageReqForInnerLoops(int vari, int num_loops)
 {
