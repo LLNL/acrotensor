@@ -20,6 +20,7 @@ namespace acro
 {
 
 class TensorKernel;
+class NonContractionOps;
 
 class TensorEngine
 {
@@ -33,6 +34,8 @@ class TensorEngine
 
     KernelExecutor &operator[](const char* bare_kernel_str);
     KernelExecutor &operator[](std::string &kernel_str);
+    void BatchMatrixInverse(Tensor &out, Tensor &in);
+
     void Clear();
     bool IsGPUAvailable() {return isCudaReady();}
     void SetAsyncLaunch();
@@ -42,9 +45,13 @@ class TensorEngine
     bool IsAsyncLaunch;
 
     KernelExecutor *GetNewExecutor(std::string &kernel_str);
+    void MoveTensorToComputeLocation(Tensor &T);
+    void SwitchTensorToComputeLocation(Tensor &T);
 
     std::string ExecutorType;
     std::map<std::string, KernelExecutor*> ExecutorMap;
+    std::string ComputeLocation;
+    NonContractionOps *Ops;
 
 #ifdef ACRO_HAVE_CUDA
     cudaStream_t TheCudaStream;

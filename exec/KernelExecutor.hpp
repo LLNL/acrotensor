@@ -37,9 +37,10 @@ class KernelExecutor
     std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6);
     std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7);
     std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7, Tensor &in8);
+
     virtual std::string GetImplementation(Tensor *out, std::vector<Tensor*> &inputs) = 0;
-    
     virtual void ExecuteKernel(Tensor *out, std::vector<Tensor*> &inputs) = 0;
+
     inline int ComputeRawIdx(const Tensor &T, const int *RESTRICT I, const std::vector<int> &loop_nums);
 
 #ifdef ACRO_HAVE_CUDA    

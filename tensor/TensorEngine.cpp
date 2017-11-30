@@ -5,6 +5,7 @@
 
 #include "TensorEngine.hpp"
 #include "TensorKernel.hpp"
+#include "Ops.hpp"
 #include <iostream>
 
 namespace acro
@@ -76,19 +77,40 @@ void TensorEngine::SetExecutorType(std::string &exec_type)
     ExecutorType = exec_type;
 }
 
+
 KernelExecutor *TensorEngine::GetNewExecutor(std::string &kernel_str)
 {
     if (ExecutorType == "CPUInterpreted")
+    {
+        ComputeLocation = "CPU";
+        Ops = new NativeCPUOps();
         return new CPUInterpretedExecutor(kernel_str);    
+    }
     if (ExecutorType == "IndexCached")
+    {
+        ComputeLocation = "CPU";
+        Ops = new NativeCPUOps();
         return new IndexCachedExecutor(kernel_str);
+    }
 #ifdef ACRO_HAVE_CUDA    
     if (ExecutorType == "OneOutPerThread")
+    {
+        ComputeLocation = "GPU";
+        Ops = new CudaGPUOps();
         return new OneOutPerThreadExecutor(kernel_str);
+    }
     if (ExecutorType == "MultiOutPerThread")
+    {
+        ComputeLocation = "GPU";
+        Ops = new CudaGPUOps();
         return new MultiOutPerThreadExecutor(kernel_str);    
+    }
     if (ExecutorType == "SMChunkPerBlock")
+    {
+        ComputeLocation = "GPU";
+        Ops = new CudaGPUOps();
         return new SMChunkPerBlockExecutor(kernel_str);
+    }
 #endif
 
     ACROBATIC_ASSERT(false, "Executor type does not exist:  " + ExecutorType);
@@ -130,7 +152,25 @@ KernelExecutor &TensorEngine::operator[](std::string &kernel_str)
 
     return *executor;
 }
+ 
 
+void TensorEngine::BatchMatrixInverse(Tensor &out, Tensor &in)
+{
+    int rank = out.GetRank();
+    ACROBATIC_ASSERT(rank >= 2, "Can't BatchMatrixInverse a matrix of rank < 2.");
+    ACROBATIC_ASSERT(rank == in.GetRank(), "Can't BatchMatrixInverse with mismatched ranks for out and in.");
+    for (int d = 0; d < rank; ++d)
+    {
+        ACROBATIC_ASSERT(out.GetDim(d) == in.GetDim(d), "Can't BatchMatrixInverse with mismatched dims for out and in.");
+    }
+    ACROBATIC_ASSERT(out.GetDim(rank-1) == out.GetDim(rank-2), "Can't BatchMatrixInverse with mismatched dims for m,n.")
+    ACROBATIC_ASSERT(out.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
+
+    SwitchTensorToComputeLocation(out);
+    MoveTensorToComputeLocation(in);
+
+    Ops->BatchMatrixInverse(out, in);
+}
 
 void TensorEngine::Clear()
 {
@@ -168,6 +208,41 @@ void TensorEngine::ReSyncLaunch()
 }
 
 
+void TensorEngine::MoveTensorToComputeLocation(Tensor &T)
+{
+    if (ComputeLocation == "CPU")
+    {
+        if (T.IsOnGPU())
+        {
+            T.MoveFromGPU();
+        }
+    }
+    else if (ComputeLocation == "GPU")
+    {
+        if (!T.IsOnGPU())
+        {
+            T.MoveToGPU();
+        }
+    }
+}
+
+void TensorEngine::SwitchTensorToComputeLocation(Tensor &T)
+{
+    if (ComputeLocation == "CPU")
+    {
+        if (T.IsOnGPU())
+        {
+            T.SwitchFromGPU();
+        }
+    }
+    else if (ComputeLocation == "GPU")
+    {
+        if (!T.IsOnGPU())
+        {
+            T.SwitchToGPU();
+        }
+    }
+}
 
 
 }

@@ -6,11 +6,13 @@
 #include "catch.hpp"
 #include "AcroTensor.hpp"
 #include <iostream>
+#include <cstdlib>
 
 using namespace acro;
 
 void test_suite_on_cpu_engine(TensorEngine &TE);
 void test_suite_on_gpu_engine(TensorEngine &TE);
+double rand_double();
 
 TEST_CASE("TensorEngine", "[TensorEngine]")
 {
@@ -115,6 +117,104 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
       T5.Set(1.0);
       TE["A_i=B_j_k_l_m_n"](T1out_3, T5);
       REQUIRE(T1out_3(0) == Approx(30.0));
+   }
+
+
+   SECTION("Batched Inverses")
+   {
+      Tensor T1(1,1), T2(2,2), T3(3,3);
+      Tensor TB1(10,1,1), TB2(10,2,2), TB3(10,3,3);
+      Tensor TBOUT1(10,1,1), TBOUT2(10,2,2), TBOUT3(10,3,3);
+      Tensor IB1(10,1,1), IB2(10,2,2), IB3(10,3,3);
+      Tensor TBB1(4,2,1,1), TBB2(4,2,2,2), TBB3(4,2,3,3);
+      Tensor X1(10), X2(3), X3(3,2), X4(4,4);
+      SECTION("Assert compatible dimensions")
+      {
+         REQUIRE_THROWS(TE.BatchMatrixInverse(X1, X1));
+         REQUIRE_THROWS(TE.BatchMatrixInverse(X2, X2));
+         REQUIRE_THROWS(TE.BatchMatrixInverse(X3, X3));
+         REQUIRE_THROWS(TE.BatchMatrixInverse(X4, X4));
+         REQUIRE_THROWS(TE.BatchMatrixInverse(T3, T2));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(T1, T1));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(T2, T2));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(T3, T3));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(TB1, TB1));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(TB2, TB2));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(TB3, TB3));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(TBB1, TBB1));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(TBB2, TBB2));
+         REQUIRE_NOTHROW(TE.BatchMatrixInverse(TBB3, TBB3));         
+      }
+
+      SECTION("Random Symm Diag Dominant A*Ainv = I")
+      {
+         SECTION("1x1")
+         {
+            for (int b = 0; b < TB1.GetDim(0); ++b)
+            {
+               TB1(b,0,0) = rand_double() + 1e-20;
+            }
+            TE.BatchMatrixInverse(TBOUT1, TB1);
+            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB1, TBOUT1, TB1);
+
+            for (int b = 0; b < IB1.GetDim(0); ++b)
+            {
+               REQUIRE(IB1(b,0,0) == Approx(1.0));
+            }
+         }
+
+         SECTION("2x2")
+         {
+            for (int b = 0; b < TB2.GetDim(0); ++b)
+            {
+               TB2(b, 0, 0) = rand_double() + 4.0;
+               TB2(b, 0, 1) = rand_double();
+               TB2(b, 1, 0) = rand_double();
+               TB2(b, 1, 1) = rand_double() + 4.0;
+            }
+            TE.BatchMatrixInverse(TBOUT2, TB2);
+            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB2, TBOUT2, TB2);
+
+            for (int b = 0; b < IB2.GetDim(0); ++b)
+            {
+               REQUIRE(IB2(b,0,0) == Approx(1.0));
+               REQUIRE(IB2(b,0,1) == Approx(0.0));
+               REQUIRE(IB2(b,1,0) == Approx(0.0));
+               REQUIRE(IB2(b,1,1) == Approx(1.0));
+            }
+         }
+
+         SECTION("3x3")
+         {
+            for (int b = 0; b < TB3.GetDim(0); ++b)
+            {
+               TB3(b, 0, 0) = rand_double() + 4.0;
+               TB3(b, 0, 1) = rand_double();
+               TB3(b, 0, 2) = rand_double();
+               TB3(b, 1, 0) = TB3(b, 0, 1);
+               TB3(b, 1, 1) = rand_double() + 4.0;
+               TB3(b, 1, 2) = rand_double();
+               TB3(b, 2, 0) = TB3(b, 0, 2);
+               TB3(b, 2, 1) = TB3(b, 1, 2);
+               TB3(b, 2, 2) = rand_double() + 4.0;
+            }
+            TE.BatchMatrixInverse(TBOUT3, TB3);
+            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB3, TBOUT3, TB3);
+
+            for (int b = 0; b < IB3.GetDim(0); ++b)
+            {
+               REQUIRE(IB3(b,0,0) == Approx(1.0));
+               REQUIRE(IB3(b,0,1) == Approx(0.0));
+               REQUIRE(IB3(b,0,2) == Approx(0.0));
+               REQUIRE(IB3(b,1,0) == Approx(0.0));
+               REQUIRE(IB3(b,1,1) == Approx(1.0));
+               REQUIRE(IB3(b,1,2) == Approx(0.0));
+               REQUIRE(IB3(b,2,0) == Approx(0.0));
+               REQUIRE(IB3(b,2,1) == Approx(0.0));
+               REQUIRE(IB3(b,2,2) == Approx(1.0));
+            }
+         }         
+      }
    }
 
    SECTION("Tensor Engine Clear")
@@ -530,6 +630,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             }              
          }
 
+
+
          /*SECTION("Async launching")
          {
             Tensor A1(256, 256);
@@ -563,4 +665,93 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          }*/
       }
    }
+
+   SECTION("Batched Inverses")
+   {
+      Tensor T1(1,1), T2(2,2), T3(3,3);
+      Tensor TB1(10,1,1), TB2(10,2,2), TB3(10,3,3);
+      Tensor TBOUT1(10,1,1), TBOUT2(10,2,2), TBOUT3(10,3,3);
+      Tensor IB1(10,1,1), IB2(10,2,2), IB3(10,3,3);
+      Tensor TBB1(4,2,1,1), TBB2(4,2,2,2), TBB3(4,2,3,3);
+
+      SECTION("Random Symm Diag Dominant A*Ainv = I")
+      {
+         SECTION("1x1")
+         {
+            for (int b = 0; b < TB1.GetDim(0); ++b)
+            {
+               TB1(b,0,0) = rand_double() + 1e-20;
+            }
+            TE.BatchMatrixInverse(TBOUT1, TB1);
+            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB1, TBOUT1, TB1);
+
+            IB1.MoveFromGPU();
+            for (int b = 0; b < IB1.GetDim(0); ++b)
+            {
+               REQUIRE(IB1(b,0,0) == Approx(1.0));
+            }
+         }
+
+         SECTION("2x2")
+         {
+            for (int b = 0; b < TB2.GetDim(0); ++b)
+            {
+               TB2(b, 0, 0) = rand_double() + 4.0;
+               TB2(b, 0, 1) = rand_double();
+               TB2(b, 1, 0) = TB2(b, 0, 1);
+               TB2(b, 1, 1) = rand_double() + 4.0;
+            }
+            TE.BatchMatrixInverse(TBOUT2, TB2);
+            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB2, TBOUT2, TB2);
+
+            IB2.MoveFromGPU();
+            for (int b = 0; b < IB2.GetDim(0); ++b)
+            {
+               REQUIRE(IB2(b,0,0) == Approx(1.0));
+               REQUIRE(IB2(b,0,1) == Approx(0.0));
+               REQUIRE(IB2(b,1,0) == Approx(0.0));
+               REQUIRE(IB2(b,1,1) == Approx(1.0));
+            }
+         }
+
+         SECTION("3x3")
+         {
+            for (int b = 0; b < TB3.GetDim(0); ++b)
+            {
+               TB3(b, 0, 0) = rand_double() + 4.0;
+               TB3(b, 0, 1) = rand_double();
+               TB3(b, 0, 2) = rand_double();
+               TB3(b, 1, 0) = TB3(b, 0, 1);
+               TB3(b, 1, 1) = rand_double() + 4.0;
+               TB3(b, 1, 2) = rand_double();
+               TB3(b, 2, 0) = TB3(b, 0, 2);
+               TB3(b, 2, 1) = TB3(b, 1, 2);
+               TB3(b, 2, 2) = rand_double() + 4.0;
+            }
+            TE.BatchMatrixInverse(TBOUT3, TB3);
+            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB3, TBOUT3, TB3);
+
+            IB3.MoveFromGPU();
+            for (int b = 0; b < IB3.GetDim(0); ++b)
+            {
+               REQUIRE(IB3(b,0,0) == Approx(1.0));
+               REQUIRE(IB3(b,0,1) == Approx(0.0));
+               REQUIRE(IB3(b,0,2) == Approx(0.0));
+               REQUIRE(IB3(b,1,0) == Approx(0.0));
+               REQUIRE(IB3(b,1,1) == Approx(1.0));
+               REQUIRE(IB3(b,1,2) == Approx(0.0));
+               REQUIRE(IB3(b,2,0) == Approx(0.0));
+               REQUIRE(IB3(b,2,1) == Approx(0.0));
+               REQUIRE(IB3(b,2,2) == Approx(1.0));
+            }
+         }         
+      }
+   }   
+}
+
+
+
+double rand_double()
+{
+   return static_cast<double>(std::rand()) / static_cast<double>(RAND_MAX);
 }
