@@ -8,45 +8,116 @@
 namespace acro
 {
 
-void NativeCPUOps::BatchMatrixInverse(Tensor &out, Tensor &in)
+void NativeCPUOps::BatchMatrixInverse(Tensor &Ainv, Tensor &A)
 {
-    //Ensure the proper data is on the CPU
-    if (out.IsOnGPU())
-        out.SwitchFromGPU();
-    if (in.IsOnGPU())
-        in.MoveFromGPU();
-
-    int rank = in.GetRank();
-    int mdim = in.GetDim(rank-1);
+    int rank = A.GetRank();
+    int mdim = A.GetDim(rank-1);
     int stride = mdim*mdim;
-    int num_batch = in.GetSize() / stride;
-    double *in_ptr = in.GetData();
-    double *out_ptr = out.GetData();
+    int num_batch = A.GetSize() / stride;
+    double *A_ptr = A.GetData();
+    double *Ainv_ptr = Ainv.GetData();
     if (mdim == 1)
     {
         for (int i = 0; i < num_batch; ++i)
         {
-            Inv1x1(out_ptr, in_ptr);
-            out_ptr += stride;
-            in_ptr += stride;
+            Inv1x1(Ainv_ptr, A_ptr, Det1x1(A_ptr));
+            Ainv_ptr += stride;
+            A_ptr += stride;
         }
     }
     else if (mdim == 2)
     {
         for (int i = 0; i < num_batch; ++i)
         {
-            Inv2x2(out_ptr, in_ptr);
-            out_ptr += stride;
-            in_ptr += stride;
+            Inv2x2(Ainv_ptr, A_ptr, Det2x2(A_ptr));
+            Ainv_ptr += stride;
+            A_ptr += stride;
         }        
     }
     else if (mdim == 3)
     {
         for (int i = 0; i < num_batch; ++i)
         {
-            Inv3x3(out_ptr, in_ptr);
-            out_ptr += stride;
-            in_ptr += stride;
+            Inv3x3(Ainv_ptr, A_ptr, Det3x3(A_ptr));
+            Ainv_ptr += stride;
+            A_ptr += stride;
+        }
+    }
+}
+
+
+void NativeCPUOps::BatchMatrixDet(Tensor &Adet, Tensor &A)
+{
+    int rank = A.GetRank();
+    int mdim = A.GetDim(rank-1);
+    int stride = mdim*mdim;
+    int num_batch = A.GetSize() / stride;
+    double *A_ptr = A.GetData();
+    double *Adet_ptr = Adet.GetData();
+    if (mdim == 1)
+    {
+        for (int i = 0; i < num_batch; ++i)
+        {
+            Adet_ptr[i] = Det1x1(A_ptr);
+            A_ptr += stride;
+        }
+    }
+    else if (mdim == 2)
+    {
+        for (int i = 0; i < num_batch; ++i)
+        {
+            Adet_ptr[i] = Det2x2(A_ptr);
+            A_ptr += stride;
+        }        
+    }
+    else if (mdim == 3)
+    {
+        for (int i = 0; i < num_batch; ++i)
+        {
+            Adet_ptr[i] = Det3x3(A_ptr);
+            A_ptr += stride;
+        }
+    }
+}
+
+
+void NativeCPUOps::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
+{
+    int rank = A.GetRank();
+    int mdim = A.GetDim(rank-1);
+    int stride = mdim*mdim;
+    int num_batch = A.GetSize() / stride;
+    double *A_ptr = A.GetData();
+    double *Ainv_ptr = Ainv.GetData();
+    double *Adet_ptr = Adet.GetData();
+    if (mdim == 1)
+    {
+        for (int i = 0; i < num_batch; ++i)
+        {
+            Adet_ptr[i] = Det1x1(A_ptr);
+            Inv1x1(Ainv_ptr, A_ptr, Adet_ptr[i]);
+            A_ptr += stride;
+            Ainv_ptr += stride;
+        }
+    }
+    else if (mdim == 2)
+    {
+        for (int i = 0; i < num_batch; ++i)
+        {
+            Adet_ptr[i] = Det2x2(A_ptr);
+            Inv2x2(Ainv_ptr, A_ptr, Adet_ptr[i]);
+            A_ptr += stride;
+            Ainv_ptr += stride;
+        }        
+    }
+    else if (mdim == 3)
+    {
+        for (int i = 0; i < num_batch; ++i)
+        {
+            Adet_ptr[i] = Det3x3(A_ptr);
+            Inv3x3(Ainv_ptr, A_ptr, Adet_ptr[i]);
+            A_ptr += stride;
+            Ainv_ptr += stride;
         }
     }
 }

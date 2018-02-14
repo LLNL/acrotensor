@@ -34,7 +34,9 @@ class TensorEngine
 
     KernelExecutor &operator[](const char* bare_kernel_str);
     KernelExecutor &operator[](std::string &kernel_str);
-    void BatchMatrixInverse(Tensor &out, Tensor &in);
+    void BatchMatrixInverse(Tensor &Ainv, Tensor &A);
+    void BatchMatrixDet(Tensor &Adet, Tensor &A);
+    void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A);
 
     void Clear();
     bool IsGPUAvailable() {return isCudaReady();}

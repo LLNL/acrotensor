@@ -18,46 +18,71 @@ namespace acro
 class NativeCPUOps : public NonContractionOps
 {
     public:
-    void BatchMatrixInverse(Tensor &out, Tensor &in);
+    void BatchMatrixInverse(Tensor &Ainv, Tensor &A);
+    void BatchMatrixDet(Tensor &Adet, Tensor &A);
+    void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A);
 
     private:
-    inline void Inv1x1(double *out, double *in);
-    inline void Inv2x2(double *out, double *in);
-    inline void Inv3x3(double *out, double *in);
+    inline void Inv1x1(double *Ainv, double *A, double det);
+    inline void Inv2x2(double *Ainv, double *A, double det);
+    inline void Inv3x3(double *Ainv, double *A, double det);
+    inline double Det1x1(double *A);
+    inline double Det2x2(double *A);
+    inline double Det3x3(double *A);    
 };
 
 
-inline void NativeCPUOps::Inv1x1(double *out, double *in)
+inline void NativeCPUOps::Inv1x1(double *Ainv, double *A, double det)
 {
-    out[0] = 1.0 / in[0];
+    Ainv[0] = 1.0 / det;
 }
 
 
-inline void NativeCPUOps::Inv2x2(double *out, double *in)
+inline void NativeCPUOps::Inv2x2(double *Ainv, double *A, double det)
 {
-    double invdet = 1.0 / (in[0]*in[3] - in[1]*in[2]);
-    out[0] = invdet*in[3];
-    out[1] = -invdet*in[1];
-    out[2] = -invdet*in[2];
-    out[3] = invdet*in[0];
+    double invdet = 1.0 / det;
+    Ainv[0] = invdet*A[3];
+    Ainv[1] = -invdet*A[1];
+    Ainv[2] = -invdet*A[2];
+    Ainv[3] = invdet*A[0];
 
 }
 
 
-inline void NativeCPUOps::Inv3x3(double *out, double *in)
+inline void NativeCPUOps::Inv3x3(double *Ainv, double *A, double det)
 {
-    double invdet = 1.0 / (in[0]*in[4]*in[8] + in[1]*in[5]*in[6] + in[2]*in[3]*in[7] 
-                         - in[6]*in[4]*in[2] - in[7]*in[5]*in[0] - in[8]*in[3]*in[1]);
-    out[0] = invdet*(in[4]*in[8] - in[5]*in[7]);
-    out[1] = invdet*(in[5]*in[6] - in[3]*in[8]);
-    out[2] = invdet*(in[3]*in[7] - in[4]*in[6]);
-    out[3] = invdet*(in[2]*in[7] - in[1]*in[8]);
-    out[4] = invdet*(in[0]*in[8] - in[2]*in[6]);
-    out[5] = invdet*(in[1]*in[6] - in[0]*in[7]);
-    out[6] = invdet*(in[1]*in[5] - in[2]*in[4]);
-    out[7] = invdet*(in[2]*in[3] - in[0]*in[5]);
-    out[8] = invdet*(in[0]*in[4] - in[1]*in[3]);
+    double invdet = 1.0 / det;
+    Ainv[0] = invdet*(A[4]*A[8] - A[5]*A[7]);
+    Ainv[1] = invdet*(A[5]*A[6] - A[3]*A[8]);
+    Ainv[2] = invdet*(A[3]*A[7] - A[4]*A[6]);
+    Ainv[3] = invdet*(A[2]*A[7] - A[1]*A[8]);
+    Ainv[4] = invdet*(A[0]*A[8] - A[2]*A[6]);
+    Ainv[5] = invdet*(A[1]*A[6] - A[0]*A[7]);
+    Ainv[6] = invdet*(A[1]*A[5] - A[2]*A[4]);
+    Ainv[7] = invdet*(A[2]*A[3] - A[0]*A[5]);
+    Ainv[8] = invdet*(A[0]*A[4] - A[1]*A[3]);
 }
+
+
+inline double NativeCPUOps::Det1x1(double *A)
+{
+    return A[0];
+}
+
+
+inline double NativeCPUOps::Det2x2(double *A)
+{
+    return (A[0]*A[3] - A[1]*A[2]);
+}
+
+
+inline double NativeCPUOps::Det3x3(double *A)
+{
+    return (A[0]*A[4]*A[8] + A[1]*A[5]*A[6] + A[2]*A[3]*A[7] 
+          - A[6]*A[4]*A[2] - A[7]*A[5]*A[0] - A[8]*A[3]*A[1]);
+}
+
+
 
 }
 

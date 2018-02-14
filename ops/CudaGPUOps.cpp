@@ -10,90 +10,242 @@
 namespace acro
 {
 
-void CudaGPUOps::BatchMatrixInverse(Tensor &out, Tensor &in)
+void CudaGPUOps::BatchMatrixInverse(Tensor &Ainv, Tensor &A)
 {
-    //Ensure the proper data is on the CPU
-    if (!out.IsOnGPU())
-        out.SwitchToGPU();
-    if (!in.IsOnGPU())
-        in.MoveToGPU();
-
-    int rank = in.GetRank();
-    int mdim = in.GetDim(rank-1);
+    int rank = A.GetRank();
+    int mdim = A.GetDim(rank-1);
     int stride = mdim*mdim;
-    int num_batch = in.GetSize() / stride;
-    double *in_ptr = in.GetDeviceData();
-    double *out_ptr = out.GetDeviceData();
+    int num_batch = A.GetSize() / stride;
+    double *A_ptr = A.GetDeviceData();
+    double *Ainv_ptr = Ainv.GetDeviceData();
     if (mdim == 1)
     {
-        CudaInv1x1<<<num_batch/128+1,128>>>(out_ptr, in_ptr, num_batch);
+        CudaInv1x1<<<num_batch/128+1,128>>>(Ainv_ptr, A_ptr, num_batch);
     }
     else if (mdim == 2)
     {
-        CudaInv2x2<<<num_batch/128+1,128>>>(out_ptr, in_ptr, num_batch);
+        CudaInv2x2<<<num_batch/128+1,128>>>(Ainv_ptr, A_ptr, num_batch);
     }
     else if (mdim == 3)
     {
-        CudaInv3x3<<<num_batch/128+1,128>>>(out_ptr, in_ptr, num_batch);
+        CudaInv3x3<<<num_batch/128+1,128>>>(Ainv_ptr, A_ptr, num_batch);
     }
 }
 
 
-__global__ void CudaInv1x1(double *out, double *in, int N)
+void CudaGPUOps::BatchMatrixDet(Tensor &Adet, Tensor &A)
+{
+    int rank = A.GetRank();
+    int mdim = A.GetDim(rank-1);
+    int stride = mdim*mdim;
+    int num_batch = A.GetSize() / stride;
+    double *A_ptr = A.GetDeviceData();
+    double *Adet_ptr = Adet.GetDeviceData();
+    if (mdim == 1)
+    {
+        CudaDet1x1<<<num_batch/128+1,128>>>(Adet_ptr, A_ptr, num_batch);
+    }
+    else if (mdim == 2)
+    {
+        CudaDet2x2<<<num_batch/128+1,128>>>(Adet_ptr, A_ptr, num_batch);
+    }
+    else if (mdim == 3)
+    {
+        CudaDet3x3<<<num_batch/128+1,128>>>(Adet_ptr, A_ptr, num_batch);
+    }
+}
+
+
+void CudaGPUOps::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
+{
+    int rank = A.GetRank();
+    int mdim = A.GetDim(rank-1);
+    int stride = mdim*mdim;
+    int num_batch = A.GetSize() / stride;
+    double *A_ptr = A.GetDeviceData();
+    double *Ainv_ptr = Ainv.GetDeviceData();    
+    double *Adet_ptr = Adet.GetDeviceData();
+    if (mdim == 1)
+    {
+        CudaInvDet1x1<<<num_batch/128+1,128>>>(Ainv_ptr, Adet_ptr, A_ptr, num_batch);
+    }
+    else if (mdim == 2)
+    {
+        CudaInvDet2x2<<<num_batch/128+1,128>>>(Ainv_ptr, Adet_ptr, A_ptr, num_batch);
+    }
+    else if (mdim == 3)
+    {
+        CudaInvDet3x3<<<num_batch/128+1,128>>>(Ainv_ptr, Adet_ptr, A_ptr, num_batch);
+    }
+}
+
+
+__global__ void CudaInv1x1(double *Ainv, double *A, int N)
 {
     int idx = blockIdx.x*blockDim.x + threadIdx.x;
     if (idx < N)
     {
-        out[idx] = 1.0 / in[idx];
+        Ainv[idx] = 1.0 / A[idx];
     }
 }
 
 
-__global__ void CudaInv2x2(double *out, double *in, int N)
+__global__ void CudaInv2x2(double *Ainv, double *A, int N)
 {
     int idx = blockIdx.x*blockDim.x + threadIdx.x;
     if (idx < N)
     {
         int b = idx*4;
-        double in0 = in[b];
-        double in1 = in[b+1];
-        double in2 = in[b+2];
-        double in3 = in[b+3];
-        double invdet = 1.0 / (in0*in3 - in1*in2);
-        out[b+0] = invdet*in3;
-        out[b+1] = -invdet*in1;
-        out[b+2] = -invdet*in2;
-        out[b+3] = invdet*in0;
+        double A0 = A[b];
+        double A1 = A[b+1];
+        double A2 = A[b+2];
+        double A3 = A[b+3];
+        double invdet = 1.0 / (A0*A3 - A1*A2);
+        Ainv[b+0] = invdet*A3;
+        Ainv[b+1] = -invdet*A1;
+        Ainv[b+2] = -invdet*A2;
+        Ainv[b+3] = invdet*A0;
     }
 }
 
 
-__global__ void CudaInv3x3(double *out, double *in, int N)
+__global__ void CudaInv3x3(double *Ainv, double *A, int N)
 {
     int idx = blockIdx.x*blockDim.x + threadIdx.x;
     if (idx < N)
     {
         int b = idx*9;
-        double in0 = in[b];
-        double in1 = in[b+1];
-        double in2 = in[b+2];
-        double in3 = in[b+3];
-        double in4 = in[b+4];
-        double in5 = in[b+5];
-        double in6 = in[b+6];
-        double in7 = in[b+7];
-        double in8 = in[b+8];
-        double invdet = 1.0 / (in0*in4*in8 + in1*in5*in6 + in2*in3*in7 
-                             - in6*in4*in2 - in7*in5*in0 - in8*in3*in1);
-        out[b+0] = invdet*(in4*in8 - in5*in7);
-        out[b+1] = invdet*(in5*in6 - in3*in8);
-        out[b+2] = invdet*(in3*in7 - in4*in6);
-        out[b+3] = invdet*(in2*in7 - in1*in8);
-        out[b+4] = invdet*(in0*in8 - in2*in6);
-        out[b+5] = invdet*(in1*in6 - in0*in7);
-        out[b+6] = invdet*(in1*in5 - in2*in4);
-        out[b+7] = invdet*(in2*in3 - in0*in5);
-        out[b+8] = invdet*(in0*in4 - in1*in3);        
+        double A0 = A[b];
+        double A1 = A[b+1];
+        double A2 = A[b+2];
+        double A3 = A[b+3];
+        double A4 = A[b+4];
+        double A5 = A[b+5];
+        double A6 = A[b+6];
+        double A7 = A[b+7];
+        double A8 = A[b+8];
+        double invdet = 1.0 / (A0*A4*A8 + A1*A5*A6 + A2*A3*A7 
+                             - A6*A4*A2 - A7*A5*A0 - A8*A3*A1);
+        Ainv[b+0] = invdet*(A4*A8 - A5*A7);
+        Ainv[b+1] = invdet*(A5*A6 - A3*A8);
+        Ainv[b+2] = invdet*(A3*A7 - A4*A6);
+        Ainv[b+3] = invdet*(A2*A7 - A1*A8);
+        Ainv[b+4] = invdet*(A0*A8 - A2*A6);
+        Ainv[b+5] = invdet*(A1*A6 - A0*A7);
+        Ainv[b+6] = invdet*(A1*A5 - A2*A4);
+        Ainv[b+7] = invdet*(A2*A3 - A0*A5);
+        Ainv[b+8] = invdet*(A0*A4 - A1*A3);        
+    }
+}
+
+
+__global__ void CudaDet1x1(double *Adet, double *A, int N)
+{
+    int idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < N)
+    {
+        Adet[idx] = A[idx];
+    }
+}
+
+
+__global__ void CudaDet2x2(double *Adet, double *A, int N)
+{
+    int idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < N)
+    {
+        int b = idx*4;
+        double A0 = A[b];
+        double A1 = A[b+1];
+        double A2 = A[b+2];
+        double A3 = A[b+3];
+        Adet[idx] = (A0*A3 - A1*A2);
+    }
+}
+
+
+__global__ void CudaDet3x3(double *Adet, double *A, int N)
+{
+    int idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < N)
+    {
+        int b = idx*9;
+        double A0 = A[b];
+        double A1 = A[b+1];
+        double A2 = A[b+2];
+        double A3 = A[b+3];
+        double A4 = A[b+4];
+        double A5 = A[b+5];
+        double A6 = A[b+6];
+        double A7 = A[b+7];
+        double A8 = A[b+8];
+        Adet[idx] = (A0*A4*A8 + A1*A5*A6 + A2*A3*A7 
+                   - A6*A4*A2 - A7*A5*A0 - A8*A3*A1);       
+    }
+}
+
+
+__global__ void CudaInvDet1x1(double *Ainv, double *Adet, double *A, int N)
+{
+    int idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < N)
+    {
+        double det = A[idx];
+        Adet[idx] = det;
+        Ainv[idx] = 1.0 / det;
+    }
+}
+
+
+__global__ void CudaInvDet2x2(double *Ainv, double *Adet, double *A, int N)
+{
+    int idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < N)
+    {
+        int b = idx*4;
+        double A0 = A[b];
+        double A1 = A[b+1];
+        double A2 = A[b+2];
+        double A3 = A[b+3];
+        double det = (A0*A3 - A1*A2);
+        Adet[idx] = det;
+        double invdet = 1.0 / det;
+        Ainv[b+0] = invdet*A3;
+        Ainv[b+1] = -invdet*A1;
+        Ainv[b+2] = -invdet*A2;
+        Ainv[b+3] = invdet*A0;
+    }
+}
+
+
+__global__ void CudaInvDet3x3(double *Ainv, double *Adet, double *A, int N)
+{
+    int idx = blockIdx.x*blockDim.x + threadIdx.x;
+    if (idx < N)
+    {
+        int b = idx*9;
+        double A0 = A[b];
+        double A1 = A[b+1];
+        double A2 = A[b+2];
+        double A3 = A[b+3];
+        double A4 = A[b+4];
+        double A5 = A[b+5];
+        double A6 = A[b+6];
+        double A7 = A[b+7];
+        double A8 = A[b+8];
+        double det = (A0*A4*A8 + A1*A5*A6 + A2*A3*A7 
+                    - A6*A4*A2 - A7*A5*A0 - A8*A3*A1);        
+        Adet[idx] = det;
+        double invdet = 1.0 / det;        
+        Ainv[b+0] = invdet*(A4*A8 - A5*A7);
+        Ainv[b+1] = invdet*(A5*A6 - A3*A8);
+        Ainv[b+2] = invdet*(A3*A7 - A4*A6);
+        Ainv[b+3] = invdet*(A2*A7 - A1*A8);
+        Ainv[b+4] = invdet*(A0*A8 - A2*A6);
+        Ainv[b+5] = invdet*(A1*A6 - A0*A7);
+        Ainv[b+6] = invdet*(A1*A5 - A2*A4);
+        Ainv[b+7] = invdet*(A2*A3 - A0*A5);
+        Ainv[b+8] = invdet*(A0*A4 - A1*A3);        
     }
 }
 

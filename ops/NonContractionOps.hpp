@@ -16,7 +16,9 @@ namespace acro
 class NonContractionOps
 {
     public:
-    virtual void BatchMatrixInverse(Tensor &out, Tensor &in) = 0;
+    virtual void BatchMatrixInverse(Tensor &Ainv, Tensor &A) = 0;
+    virtual void BatchMatrixDet(Tensor &Adet, Tensor &A) = 0;
+    virtual void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A) = 0;
 };
 
 }

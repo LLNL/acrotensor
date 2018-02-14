@@ -124,6 +124,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
    {
       Tensor T1(1,1), T2(2,2), T3(3,3);
       Tensor TB1(10,1,1), TB2(10,2,2), TB3(10,3,3);
+      Tensor DB1(10), DB2(10), DB3(10);
       Tensor TBOUT1(10,1,1), TBOUT2(10,2,2), TBOUT3(10,3,3);
       Tensor IB1(10,1,1), IB2(10,2,2), IB3(10,3,3);
       Tensor TBB1(4,2,1,1), TBB2(4,2,2,2), TBB3(4,2,3,3);
@@ -146,7 +147,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
          REQUIRE_NOTHROW(TE.BatchMatrixInverse(TBB3, TBB3));         
       }
 
-      SECTION("Random Symm Diag Dominant A*Ainv = I")
+      SECTION("Random Symm Diag Dominant A*Ainv = I, and det(A)*det(Ainv) = 1")
       {
          SECTION("1x1")
          {
@@ -154,12 +155,17 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
             {
                TB1(b,0,0) = rand_double() + 1e-20;
             }
+            //TE.BatchMatrixInvDet(TBOUT1, DB1, TB1);
             TE.BatchMatrixInverse(TBOUT1, TB1);
+            TE.BatchMatrixDet(DB1, TB1);
+            TE.BatchMatrixDet(DB2, TBOUT1);
             TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB1, TBOUT1, TB1);
+            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
 
             for (int b = 0; b < IB1.GetDim(0); ++b)
             {
                REQUIRE(IB1(b,0,0) == Approx(1.0));
+               REQUIRE(DB3(b) == Approx(1.0));
             }
          }
 
@@ -172,8 +178,10 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
                TB2(b, 1, 0) = rand_double();
                TB2(b, 1, 1) = rand_double() + 4.0;
             }
-            TE.BatchMatrixInverse(TBOUT2, TB2);
+            TE.BatchMatrixInvDet(TBOUT2, DB1, TB2);
+            TE.BatchMatrixDet(DB2, TBOUT2);
             TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB2, TBOUT2, TB2);
+            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
 
             for (int b = 0; b < IB2.GetDim(0); ++b)
             {
@@ -181,6 +189,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
                REQUIRE(IB2(b,0,1) == Approx(0.0));
                REQUIRE(IB2(b,1,0) == Approx(0.0));
                REQUIRE(IB2(b,1,1) == Approx(1.0));
+               REQUIRE(DB3(b) == Approx(1.0));
             }
          }
 
@@ -198,8 +207,10 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
                TB3(b, 2, 1) = TB3(b, 1, 2);
                TB3(b, 2, 2) = rand_double() + 4.0;
             }
-            TE.BatchMatrixInverse(TBOUT3, TB3);
+            TE.BatchMatrixInvDet(TBOUT3, DB1, TB3);
+            TE.BatchMatrixDet(DB2, TBOUT3);
             TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB3, TBOUT3, TB3);
+            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
 
             for (int b = 0; b < IB3.GetDim(0); ++b)
             {
@@ -212,6 +223,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
                REQUIRE(IB3(b,2,0) == Approx(0.0));
                REQUIRE(IB3(b,2,1) == Approx(0.0));
                REQUIRE(IB3(b,2,2) == Approx(1.0));
+               REQUIRE(DB3(b) == Approx(1.0));
             }
          }         
       }
@@ -666,15 +678,16 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
       }
    }
 
-   SECTION("Batched Inverses")
+   SECTION("Batched Inverses/Determinents")
    {
       Tensor T1(1,1), T2(2,2), T3(3,3);
       Tensor TB1(10,1,1), TB2(10,2,2), TB3(10,3,3);
+      Tensor DB1(10), DB2(10), DB3(10);
       Tensor TBOUT1(10,1,1), TBOUT2(10,2,2), TBOUT3(10,3,3);
       Tensor IB1(10,1,1), IB2(10,2,2), IB3(10,3,3);
       Tensor TBB1(4,2,1,1), TBB2(4,2,2,2), TBB3(4,2,3,3);
 
-      SECTION("Random Symm Diag Dominant A*Ainv = I")
+      SECTION("Random Symm Diag Dominant A*Ainv = I and det(A)*det(Ainv) = 1")
       {
          SECTION("1x1")
          {
@@ -682,13 +695,17 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             {
                TB1(b,0,0) = rand_double() + 1e-20;
             }
-            TE.BatchMatrixInverse(TBOUT1, TB1);
+            TE.BatchMatrixInvDet(TBOUT1, DB1, TB1);
+            TE.BatchMatrixDet(DB2, TBOUT1);
             TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB1, TBOUT1, TB1);
+            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
 
             IB1.MoveFromGPU();
+            DB3.MoveFromGPU();
             for (int b = 0; b < IB1.GetDim(0); ++b)
             {
                REQUIRE(IB1(b,0,0) == Approx(1.0));
+               REQUIRE(DB3(b) == Approx(1.0));
             }
          }
 
@@ -701,16 +718,20 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
                TB2(b, 1, 0) = TB2(b, 0, 1);
                TB2(b, 1, 1) = rand_double() + 4.0;
             }
-            TE.BatchMatrixInverse(TBOUT2, TB2);
+            TE.BatchMatrixInvDet(TBOUT2, DB1, TB2);
+            TE.BatchMatrixDet(DB2, TBOUT2);
             TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB2, TBOUT2, TB2);
+            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
 
             IB2.MoveFromGPU();
+            DB3.MoveFromGPU();
             for (int b = 0; b < IB2.GetDim(0); ++b)
             {
                REQUIRE(IB2(b,0,0) == Approx(1.0));
                REQUIRE(IB2(b,0,1) == Approx(0.0));
                REQUIRE(IB2(b,1,0) == Approx(0.0));
                REQUIRE(IB2(b,1,1) == Approx(1.0));
+               REQUIRE(DB3(b) == Approx(1.0));
             }
          }
 
@@ -728,10 +749,13 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
                TB3(b, 2, 1) = TB3(b, 1, 2);
                TB3(b, 2, 2) = rand_double() + 4.0;
             }
-            TE.BatchMatrixInverse(TBOUT3, TB3);
+            TE.BatchMatrixInvDet(TBOUT3, DB1, TB3);
+            TE.BatchMatrixDet(DB2, TBOUT3);
             TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB3, TBOUT3, TB3);
+            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
 
             IB3.MoveFromGPU();
+            DB3.MoveFromGPU();
             for (int b = 0; b < IB3.GetDim(0); ++b)
             {
                REQUIRE(IB3(b,0,0) == Approx(1.0));
@@ -743,6 +767,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
                REQUIRE(IB3(b,2,0) == Approx(0.0));
                REQUIRE(IB3(b,2,1) == Approx(0.0));
                REQUIRE(IB3(b,2,2) == Approx(1.0));
+               REQUIRE(DB3(b) == Approx(1.0));
             }
          }         
       }

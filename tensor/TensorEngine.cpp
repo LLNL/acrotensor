@@ -15,6 +15,7 @@ namespace acro
 TensorEngine::TensorEngine()
 {
     std::string exec_type("CPUInterpreted");
+    Ops = NULL;
     SetExecutorType(exec_type);
     IsAsyncLaunch = false;
     TheCudaStream = NULL;    
@@ -24,6 +25,7 @@ TensorEngine::TensorEngine()
 TensorEngine::TensorEngine(const char *bare_exec_type)
 {
     std::string exec_type(bare_exec_type);
+    Ops = NULL;
     SetExecutorType(exec_type);
     IsAsyncLaunch = false;
     TheCudaStream = NULL;
@@ -32,6 +34,7 @@ TensorEngine::TensorEngine(const char *bare_exec_type)
 
 TensorEngine::TensorEngine(std::string &exec_type)
 {
+    Ops = NULL;
     SetExecutorType(exec_type);
     IsAsyncLaunch = false;
     TheCudaStream = NULL;  
@@ -75,6 +78,34 @@ void TensorEngine::SetExecutorType(std::string &exec_type)
 
     Clear();
     ExecutorType = exec_type;
+
+    if (ExecutorType == "CPUInterpreted")
+    {
+        ComputeLocation = "CPU";
+        Ops = new NativeCPUOps();
+    }
+    if (ExecutorType == "IndexCached")
+    {
+        ComputeLocation = "CPU";
+        Ops = new NativeCPUOps();
+    }
+#ifdef ACRO_HAVE_CUDA    
+    if (ExecutorType == "OneOutPerThread")
+    {
+        ComputeLocation = "GPU";
+        Ops = new CudaGPUOps();
+    }
+    if (ExecutorType == "MultiOutPerThread")
+    {
+        ComputeLocation = "GPU";
+        Ops = new CudaGPUOps();
+    }
+    if (ExecutorType == "SMChunkPerBlock")
+    {
+        ComputeLocation = "GPU";
+        Ops = new CudaGPUOps();
+    }
+#endif
 }
 
 
@@ -82,39 +113,29 @@ KernelExecutor *TensorEngine::GetNewExecutor(std::string &kernel_str)
 {
     if (ExecutorType == "CPUInterpreted")
     {
-        ComputeLocation = "CPU";
-        Ops = new NativeCPUOps();
         return new CPUInterpretedExecutor(kernel_str);    
     }
     if (ExecutorType == "IndexCached")
     {
-        ComputeLocation = "CPU";
-        Ops = new NativeCPUOps();
         return new IndexCachedExecutor(kernel_str);
     }
 #ifdef ACRO_HAVE_CUDA    
     if (ExecutorType == "OneOutPerThread")
     {
-        ComputeLocation = "GPU";
-        Ops = new CudaGPUOps();
         return new OneOutPerThreadExecutor(kernel_str);
     }
     if (ExecutorType == "MultiOutPerThread")
     {
-        ComputeLocation = "GPU";
-        Ops = new CudaGPUOps();
         return new MultiOutPerThreadExecutor(kernel_str);    
     }
     if (ExecutorType == "SMChunkPerBlock")
     {
-        ComputeLocation = "GPU";
-        Ops = new CudaGPUOps();
         return new SMChunkPerBlockExecutor(kernel_str);
     }
 #endif
 
     ACROBATIC_ASSERT(false, "Executor type does not exist:  " + ExecutorType);
-    return nullptr;
+    return NULL;
 }
 
 
@@ -154,23 +175,71 @@ KernelExecutor &TensorEngine::operator[](std::string &kernel_str)
 }
  
 
-void TensorEngine::BatchMatrixInverse(Tensor &out, Tensor &in)
+void TensorEngine::BatchMatrixInverse(Tensor &Ainv, Tensor &A)
 {
-    int rank = out.GetRank();
-    ACROBATIC_ASSERT(rank >= 2, "Can't BatchMatrixInverse a matrix of rank < 2.");
-    ACROBATIC_ASSERT(rank == in.GetRank(), "Can't BatchMatrixInverse with mismatched ranks for out and in.");
+    int rank = A.GetRank();
+    ACROBATIC_ASSERT(rank >= 2, "Can't BatchMatrixInverse a tensor of rank < 2.");
+    ACROBATIC_ASSERT(rank == Ainv.GetRank(), "Can't BatchMatrixInverse with mismatched ranks for Ainv and in.");
     for (int d = 0; d < rank; ++d)
     {
-        ACROBATIC_ASSERT(out.GetDim(d) == in.GetDim(d), "Can't BatchMatrixInverse with mismatched dims for out and in.");
+        ACROBATIC_ASSERT(Ainv.GetDim(d) == A.GetDim(d), "Can't BatchMatrixInverse with mismatched dims for Ainv and in.");
     }
-    ACROBATIC_ASSERT(out.GetDim(rank-1) == out.GetDim(rank-2), "Can't BatchMatrixInverse with mismatched dims for m,n.")
-    ACROBATIC_ASSERT(out.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
+    ACROBATIC_ASSERT(Ainv.GetDim(rank-1) == Ainv.GetDim(rank-2), "Can't BatchMatrixInverse with mismatched dims for m,n.")
+    ACROBATIC_ASSERT(Ainv.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
 
-    SwitchTensorToComputeLocation(out);
-    MoveTensorToComputeLocation(in);
+    SwitchTensorToComputeLocation(Ainv);
+    MoveTensorToComputeLocation(A);
 
-    Ops->BatchMatrixInverse(out, in);
+    Ops->BatchMatrixInverse(Ainv, A);
 }
+
+
+void TensorEngine::BatchMatrixDet(Tensor &Adet, Tensor &A)
+{
+    int rank = A.GetRank();
+    ACROBATIC_ASSERT(rank >= 3, "Can't BatchMatrixDet a tensor of rank < 2.");
+    ACROBATIC_ASSERT(Adet.GetRank() == rank - 2, "Can't BatchMatrixDet with mismatched ranks for Adet and A.");
+    for (int d = 0; d < Adet.GetRank(); ++d)
+    {
+        ACROBATIC_ASSERT(Adet.GetDim(d) == A.GetDim(d), "Can't BatchMatrixDet with mismatched dims for Adet and A.");
+    }
+    ACROBATIC_ASSERT(A.GetDim(rank-1) == A.GetDim(rank-2), "Can't BatchMatrixDet with mismatched dims for m,n in the matrix.")
+    ACROBATIC_ASSERT(A.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
+
+    SwitchTensorToComputeLocation(Adet);
+    MoveTensorToComputeLocation(A);
+
+    Ops->BatchMatrixDet(Adet, A);
+}
+
+
+void TensorEngine::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
+{
+    int rank = A.GetRank();
+    ACROBATIC_ASSERT(rank >= 2, "Can't BatchMatrixInverse a tensor of rank < 2.");
+    ACROBATIC_ASSERT(rank == Ainv.GetRank(), "Can't BatchMatrixInverse with mismatched ranks for Ainv and in.");
+    for (int d = 0; d < rank; ++d)
+    {
+        ACROBATIC_ASSERT(Ainv.GetDim(d) == A.GetDim(d), "Can't BatchMatrixInverse with mismatched dims for Ainv and in.");
+    }
+    ACROBATIC_ASSERT(Ainv.GetDim(rank-1) == Ainv.GetDim(rank-2), "Can't BatchMatrixInverse with mismatched dims for m,n.")
+    ACROBATIC_ASSERT(Ainv.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
+
+    ACROBATIC_ASSERT(rank >= 3, "Can't BatchMatrixDet a tensor of rank < 2.");
+    ACROBATIC_ASSERT(Adet.GetRank() == rank - 2, "Can't BatchMatrixDet with mismatched ranks for Adet and A.");
+    for (int d = 0; d < Adet.GetRank(); ++d)
+    {
+        ACROBATIC_ASSERT(Adet.GetDim(d) == A.GetDim(d), "Can't BatchMatrixDet with mismatched dims for Adet and A.");
+    }
+    ACROBATIC_ASSERT(A.GetDim(rank-1) == A.GetDim(rank-2), "Can't BatchMatrixDet with mismatched dims for m,n in the matrix.")
+
+    SwitchTensorToComputeLocation(Ainv);
+    SwitchTensorToComputeLocation(Adet);
+    MoveTensorToComputeLocation(A);
+
+    Ops->BatchMatrixInvDet(Ainv, Adet, A);
+}
+
 
 void TensorEngine::Clear()
 {
@@ -179,6 +248,12 @@ void TensorEngine::Clear()
         delete it->second;
     }
     ExecutorMap.clear();
+
+    if (Ops != NULL)
+    {
+        delete Ops;
+    }
+    Ops = NULL;
 }
 
 void TensorEngine::SetAsyncLaunch()

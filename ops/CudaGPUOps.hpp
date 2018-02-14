@@ -21,12 +21,20 @@ class CudaGPUOps : public NonContractionOps
 {
     public:
     void BatchMatrixInverse(Tensor &out, Tensor &in);
+    void BatchMatrixDet(Tensor &Adet, Tensor &A);
+    void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A);
 };
 
 
-__global__ void CudaInv1x1(double *out, double *in, int N);
-__global__ void CudaInv2x2(double *out, double *in, int N);
-__global__ void CudaInv3x3(double *out, double *in, int N);
+__global__ void CudaInv1x1(double *Ainv, double *A, int N);
+__global__ void CudaInv2x2(double *Ainv, double *A, int N);
+__global__ void CudaInv3x3(double *Ainv, double *A, int N);
+__global__ void CudaDet1x1(double *Adet, double *A, int N);
+__global__ void CudaDet2x2(double *Adet, double *A, int N);
+__global__ void CudaDet3x3(double *Adet, double *A, int N);
+__global__ void CudaInvDet1x1(double *Ainv, double *Adet, double *A, int N);
+__global__ void CudaInvDet2x2(double *Ainv, double *Adet, double *A, int N);
+__global__ void CudaInvDet3x3(double *Ainv, double *Adet, double *A, int N);
 
 }
 
