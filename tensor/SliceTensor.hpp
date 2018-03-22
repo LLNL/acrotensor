@@ -14,6 +14,7 @@ namespace acro
 class SliceTensor : public Tensor
 {
     public:
+    SliceTensor() {};
     SliceTensor(Tensor &T, std::vector<int> &sind);
     SliceTensor(Tensor &T, int d0);
     SliceTensor(Tensor &T, int d0, int d1);
@@ -25,6 +26,15 @@ class SliceTensor : public Tensor
     SliceTensor(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6, int d7);
     SliceTensor(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6, int d7, int d8);
     void SliceInit(Tensor &T, std::vector<int> &sind);
+    void SliceInit(Tensor &T, int d0);
+    void SliceInit(Tensor &T, int d0, int d1);
+    void SliceInit(Tensor &T, int d0, int d1, int d2);
+    void SliceInit(Tensor &T, int d0, int d1, int d2, int d3);
+    void SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4);
+    void SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5);
+    void SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6);
+    void SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6, int d7);
+    void SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6, int d7, int d8);    
     ~SliceTensor() {}
 
     virtual void Retarget(double *hdata, double*ddata=nullptr) {ACROBATIC_ASSERT(false, "Retarget not supported on SliceTensors");}

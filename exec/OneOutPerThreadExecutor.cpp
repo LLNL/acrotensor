@@ -132,17 +132,18 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
     "extern \"C\"  \n"
     "__global__ void <KERNEL_NAME>(double *dout, double **din)\n"
     "{\n"
-    "    double rhs_val;\n"
     "    double sum;\n"
     "    int outidx = (blockIdx.x*blockDim.x + threadIdx.x);\n"
+    "\n"
+        "<PRELOAD_SMVARS>"
+    "\n"
+    "    __syncthreads();\n"
     "    if (outidx < <OUTIDX_SIZE>) {\n"
     "        sum = 0.0;\n"
             "<COMPUTE_IOUT>"
     "\n"
             "<CONTLOOPS>"
-    "            rhs_val = 1.0;\n"
-                "<COMPUTE_RHS>"
-    "            sum += rhs_val;\n"
+    "            sum += <COMPUTE_RHS>;\n"
             "<ENDCONTLOOPS>"
     "        dout[outidx] <OUT_EQ_OP> sum;\n"
     "    }\n"
@@ -155,6 +156,35 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
     {
         cuda_kernel->FunctionName += "_" + std::to_string(N[loopd]);
     }
+
+    //If applicable Generate the SM preload code for small tensors
+    std::vector<bool> sharedmem_invars;
+    GetSharedMemInvars(sharedmem_invars);
+    std::string computePreloadSMVarsStr;
+    for (int ivari = 0; ivari < numinvars; ++ivari)
+    {
+        if (sharedmem_invars[ivari])
+        {
+            computePreloadSMVarsStr += "    __shared__ double sdin" + std::to_string(ivari);
+            computePreloadSMVarsStr += "[" + std::to_string(Kernel.GetVarSize(ivari)) + "];\n";
+        }
+    }
+    for (int ivari = 0; ivari < numinvars; ++ivari)
+    {
+        if (sharedmem_invars[ivari])
+        {
+            std::string temp = 
+                "    for (int idx = threadIdx.x; idx < <SMVAR_SIZE>; idx += blockDim.x)\n"
+                "    {\n"
+                "        sdin<VARNUM>[idx] = din[<VARNUM>][idx];\n"
+                "    }\n"
+                "    __syncwarp();\n\n";
+            str_replace_all(temp, "<SMVAR_SIZE>", Kernel.GetVarSize(ivari));
+            str_replace_all(temp, "<VARNUM>", ivari);
+            computePreloadSMVarsStr += temp;
+        }
+    }
+
 
     //Generate the indices outside the contraction loop
     std::string computeIOutStr;
@@ -179,7 +209,7 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
         computeIOutStr += ";\n";
     }
 
-    //Generate the unrolled I computation
+    //Generate the contraction loops
     std::string contLoops;
     std::vector<bool> hoisted(Kernel.GetNumInputVars(), false);
     for (int loopd = numoutloops; loopd < numloops; ++loopd)
@@ -187,18 +217,10 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
         std::string temp;
         for (int ivari = 0; ivari < Kernel.GetNumInputVars(); ++ ivari)
         {
-            if (Kernel.GetVarLoopDepth(ivari) < loopd && !hoisted[ivari])
+            if (Kernel.GetVarLoopDepth(ivari) < loopd && !sharedmem_invars[ivari] && !hoisted[ivari])
             {
                 std::string ivaristr = std::to_string(ivari);
-                std::string varidxstr = "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "*" +
-                                        std::to_string(Kernel.GetVarDimStride(ivari, 0));
-                for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
-                {
-                    varidxstr += " + ";
-                    varidxstr += "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "*" +
-                                 std::to_string(Kernel.GetVarDimStride(ivari, d));
-                }               
-
+                std::string varidxstr = GetVarIndexString(ivari);             
                 temp += "        double din" + ivaristr + " = __ldg(&din[" + ivaristr + "][" + varidxstr + "]);\n";
                 hoisted[ivari] = true;
             }
@@ -212,26 +234,25 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
     }
     std::string endContLoops = "        " + std::string(numcontloops, '}') + "\n";
 
-    //Generate the RHS computation
-    std::string computeRHSStr;  
+    //Generate the RHS computation inside the contraction loops
+    std::string computeRHSStr;
     for (int ivari = 0; ivari < numinvars; ++ ivari)
     {
-        if (hoisted[ivari])
+        if (sharedmem_invars[ivari])
         {
-            computeRHSStr += "            rhs_val *= din" + std::to_string(ivari) + ";\n";
+            computeRHSStr += "sdin" + std::to_string(ivari) = "[" + GetVarIndexString(ivari) + "]";
+        }
+        else if (hoisted[ivari])
+        {
+            computeRHSStr += "din" + std::to_string(ivari);
         }
         else
         {
-            computeRHSStr += "            rhs_val *= __ldg(&din[" + std::to_string(ivari) + "][";
-            computeRHSStr += "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, 0)) + "*" +
-                              std::to_string(Kernel.GetVarDimStride(ivari, 0));                         
-            for (int d = 1; d < Kernel.GetVarRank(ivari); ++d)
-            {
-                computeRHSStr += " + ";
-                computeRHSStr += "I" + std::to_string(Kernel.GetVarDimLoopNum(ivari, d)) + "*" +
-                                  std::to_string(Kernel.GetVarDimStride(ivari, d));                                   
-            }
-            computeRHSStr += "]);\n";
+            computeRHSStr += "__ldg(&din[" + std::to_string(ivari) + "][" + GetVarIndexString(ivari) + "])";
+        }
+        if (ivari < numinvars-1)
+        {
+            computeRHSStr += "*";
         }
     }
 
@@ -241,6 +262,7 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
     str_replace_all(cuda_kernel->Code, "<OUTIDX_SIZE>", outidx_size);
     str_replace_all(cuda_kernel->Code, "<CONTIDX_SIZE>", contidx_size);
     str_replace_all(cuda_kernel->Code, "<UNROLL_SIZE>", unroll_size);
+    str_replace_all(cuda_kernel->Code, "<PRELOAD_SMVARS>", computePreloadSMVarsStr);
     str_replace_all(cuda_kernel->Code, "<COMPUTE_IOUT>", computeIOutStr);
     str_replace_all(cuda_kernel->Code, "<CONTLOOPS>", contLoops);
     str_replace_all(cuda_kernel->Code, "<ENDCONTLOOPS>", endContLoops);
@@ -255,24 +277,37 @@ CudaKernel *OneOutPerThreadExecutor::GenerateCudaKernel()
 }
 
 
-void OneOutPerThreadExecutor::GetSharedMemInvars(const std::vector<int> &N, std::vector<bool> &sharedmem_invars)
+void OneOutPerThreadExecutor::GetSharedMemInvars(std::vector<bool> &sharedmem_invars)
 {
     int numinvars = Kernel.GetNumInputVars();
+    int numoutloops = Kernel.GetNumOuterLoops();
     sharedmem_invars.resize(numinvars);
-    int shared_dbls_remaining = CudaDeviceProp.sharedMemPerBlock / 8;
+    int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / 256;
+    int shared_dbls_remaining = (CudaDeviceProp.sharedMemPerMultiprocessor / num_blocks_per_full_sm) / 8;
     for (int ivari = 0; ivari < numinvars; ++ivari)
     {
+        sharedmem_invars[ivari] = false;
         int ivar_size = Kernel.GetVarSize(ivari);
-        if (ivar_size < shared_dbls_remaining)
+        if (false && ivar_size < shared_dbls_remaining)
         {
             sharedmem_invars[ivari] = true;
             shared_dbls_remaining -= ivar_size;
         }
-        else
-        {
-            sharedmem_invars[ivari] = false;
-        }
     }
+}
+
+
+std::string OneOutPerThreadExecutor::GetVarIndexString(int vari)
+{
+    std::string indexStr = "I" + std::to_string(Kernel.GetVarDimLoopNum(vari, 0)) + "*" +
+                            std::to_string(Kernel.GetVarDimStride(vari, 0));                         
+    for (int d = 1; d < Kernel.GetVarRank(vari); ++d)
+    {
+        indexStr += " + ";
+        indexStr += "I" + std::to_string(Kernel.GetVarDimLoopNum(vari, d)) + "*" +
+                          std::to_string(Kernel.GetVarDimStride(vari, d));                                   
+    }
+    return indexStr;
 }
 
 }

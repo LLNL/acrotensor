@@ -51,7 +51,7 @@ void CudaKernel::GenerateFunction()
     const char *opts[] = {"--restrict", "--use_fast_math", "--gpu-architecture=compute_60", "-lineinfo"};
     //const char *opts[] = {"--restrict", "--use_fast_math", "-lineinfo"};
     nvrtcResult rcode = nvrtcCompileProgram(prog,  // prog
-                                            3,     // numOptions
+                                            4,     // numOptions
                                             opts); // options
     if (rcode != NVRTC_SUCCESS)
     {

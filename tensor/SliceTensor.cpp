@@ -76,6 +76,68 @@ SliceTensor::SliceTensor(Tensor &T, int d0, int d1, int d2, int d3, int d4, int 
     SliceInit(T, sind);
 }
 
+void SliceTensor::SliceInit(Tensor &T, int d0)
+{
+    std::vector<int> sind = {d0};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1)
+{
+    std::vector<int> sind = {d0,d1};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2)
+{
+    std::vector<int> sind = {d0,d1,d2};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2, int d3)
+{
+    std::vector<int> sind = {d0,d1,d2,d3};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4)
+{
+    std::vector<int> sind = {d0,d1,d2,d3,d4};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5)
+{
+    std::vector<int> sind = {d0,d1,d2,d3,d4,d5};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6)
+{
+    std::vector<int> sind = {d0,d1,d2,d3,d4,d5,d6};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6, int d7)
+{
+    std::vector<int> sind = {d0,d1,d2,d3,d4,d5,d6,d7};
+    SliceInit(T, sind);
+}
+
+
+void SliceTensor::SliceInit(Tensor &T, int d0, int d1, int d2, int d3, int d4, int d5, int d6, int d7, int d8)
+{
+    std::vector<int> sind = {d0,d1,d2,d3,d4,d5,d6,d7,d8};
+    SliceInit(T, sind);
+}
+
 
 void SliceTensor::SliceInit(Tensor &T, std::vector<int> &sind)
 {

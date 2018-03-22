@@ -26,7 +26,8 @@ class OneOutPerThreadExecutor : public KernelExecutor
     void ExecuteLoopsCuda();
 
     CudaKernel *GenerateCudaKernel();
-    void GetSharedMemInvars(const std::vector<int> &N, std::vector<bool> &sharedmem_invars);
+    void GetSharedMemInvars(std::vector<bool> &sharedmem_invars);
+    std::string GetVarIndexString(int vari);
     cudaDeviceProp CudaDeviceProp;
     std::map<std::vector<int>, CudaKernel* > CudaKernelMap;
 };

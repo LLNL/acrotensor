@@ -220,7 +220,7 @@ void TensorEngine::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
     ACROBATIC_ASSERT(rank == Ainv.GetRank(), "Can't BatchMatrixInverse with mismatched ranks for Ainv and in.");
     for (int d = 0; d < rank; ++d)
     {
-        ACROBATIC_ASSERT(Ainv.GetDim(d) == A.GetDim(d), "Can't BatchMatrixInverse with mismatched dims for Ainv and in.");
+        ACROBATIC_ASSERT(Ainv.GetDim(d) == A.GetDim(d), "Can't BatchMatrixInverse with mismatched dims for Ainv and A.");
     }
     ACROBATIC_ASSERT(Ainv.GetDim(rank-1) == Ainv.GetDim(rank-2), "Can't BatchMatrixInverse with mismatched dims for m,n.")
     ACROBATIC_ASSERT(Ainv.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")

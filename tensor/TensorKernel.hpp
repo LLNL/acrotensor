@@ -43,7 +43,7 @@ class TensorKernel
     //The number of input variables referenced in the kernel
     int GetNumInputVars() {return InputVars.size();}
 
-    //The rank of the given input variable
+    //The rank of the given variable (vari = -1 for output)
     int GetVarRank(int vari);
 
     //The loop number for the given variable/dimension (vari = -1 for output)
@@ -91,7 +91,7 @@ class TensorKernel
     //Get the number of indices in the first num_loops
     int GetIdxSizeForFirstNumLoops(int num_loops);
 
-    //The stride in flattened index space of a given variable/dimension in the kernel (vari=-1 ofr output)
+    //The stride in flattened index space of a given variable/dimension in the kernel (vari=-1 for output)
     int GetVarDimStride(int vari, int dim);
 
     //The number of index combinations in a given variable in the kernel (vari=-1 for output)
