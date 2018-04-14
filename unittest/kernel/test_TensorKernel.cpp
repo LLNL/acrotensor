@@ -12,8 +12,6 @@ std::string reconstruct_kernel_str(TensorKernel &Kernel);
 
 TEST_CASE("TensorKernel operations", "[TensorKernel]")
 {
-   Tensor T1out_3(3), T2out_3_3(3, 3), T1_3(3), T1_2(2), T2_3_3(3,3);
-
    SECTION("Assert Parsable String")
    {
       REQUIRE_THROWS(new TensorKernel("Blah"));
@@ -42,19 +40,9 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.AllIndexNames.size() == 1);
          REQUIRE(Kernel.AllIndexNames[0] == "i");
          REQUIRE(Kernel.ContractionIndexNames.size() == 0);
-      }
 
-      SECTION("Dimensions")
-      {
-         std::vector<Tensor*> inputs;
-         inputs.push_back(&T1_3);
-         inputs.push_back(&T1_3);
-         Kernel.AttachTensors(&T1out_3, inputs);
-         REQUIRE(Kernel.GetFlatIdxSize() == 3);
-         REQUIRE(Kernel.GetOutIdxSize() == 3);
-         REQUIRE(Kernel.GetContIdxSize() == 1);
-         REQUIRE(Kernel.GetNumLoops() == 1);
-         REQUIRE(Kernel.GetNumContractionLoops() == 0);
+         REQUIRE(Kernel.GetNumIndices() == 1);
+         REQUIRE(Kernel.GetNumContractionIndices() == 0);
          REQUIRE(Kernel.GetNumVars() == 3);
          REQUIRE(Kernel.GetNumInputVars() == 2);
          REQUIRE(Kernel.GetVarDimLoopNum(0, 0) == 0);
@@ -62,9 +50,6 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.IsVarDependentOnLoop(-1, 0));
          REQUIRE(Kernel.IsVarDependentOnLoop(0, 0));
          REQUIRE(Kernel.IsVarDependentOnLoop(1, 0));
-         REQUIRE(Kernel.GetOutputStorageReqForInnerLoops(1) == 3);
-         REQUIRE(Kernel.GetInputStorageReqForInnerLoops(1) == 6);
-       
       }
    }
 
@@ -79,19 +64,9 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.AllIndexNames[1] == "s");
          REQUIRE(Kernel.ContractionIndexNames.size() == 1);
          REQUIRE(Kernel.ContractionIndexNames[0] == "s");
-      }
 
-      SECTION("Dimensions")
-      {
-         std::vector<Tensor*> inputs;
-         inputs.push_back(&T2_3_3);
-         inputs.push_back(&T2_3_3);
-         Kernel.AttachTensors(&T1out_3, inputs);
-         REQUIRE(Kernel.GetFlatIdxSize() == 9);
-         REQUIRE(Kernel.GetOutIdxSize() == 3);
-         REQUIRE(Kernel.GetContIdxSize() == 3);
-         REQUIRE(Kernel.GetNumLoops() == 2);
-         REQUIRE(Kernel.GetNumContractionLoops() == 1);
+         REQUIRE(Kernel.GetNumIndices() == 2);
+         REQUIRE(Kernel.GetNumContractionIndices() == 1);
          REQUIRE(Kernel.GetNumVars() == 3);
          REQUIRE(Kernel.GetNumInputVars() == 2);
          REQUIRE(Kernel.GetVarDimLoopNum(0, 0) == 1);
@@ -104,10 +79,6 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.IsVarDependentOnLoop(0, 1));
          REQUIRE(Kernel.IsVarDependentOnLoop(1, 0));
          REQUIRE(Kernel.IsVarDependentOnLoop(1, 1));
-         REQUIRE(Kernel.GetOutputStorageReqForInnerLoops(1) == 1);
-         REQUIRE(Kernel.GetOutputStorageReqForInnerLoops(2) == 3);
-         REQUIRE(Kernel.GetInputStorageReqForInnerLoops(1) == 6);
-         REQUIRE(Kernel.GetInputStorageReqForInnerLoops(2) == 18);
       }
    }
 
@@ -122,19 +93,9 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.AllIndexNames[1] == "s");
          REQUIRE(Kernel.ContractionIndexNames.size() == 1);
          REQUIRE(Kernel.ContractionIndexNames[0] == "s");
-      }
 
-      SECTION("Dimensions")
-      {
-         std::vector<Tensor*> inputs;
-         inputs.push_back(&T2_3_3);
-         inputs.push_back(&T1_3);
-         Kernel.AttachTensors(&T1out_3, inputs);
-         REQUIRE(Kernel.GetFlatIdxSize() == 9);
-         REQUIRE(Kernel.GetOutIdxSize() == 3);
-         REQUIRE(Kernel.GetContIdxSize() == 3);
-         REQUIRE(Kernel.GetNumLoops() == 2);
-         REQUIRE(Kernel.GetNumContractionLoops() == 1);
+         REQUIRE(Kernel.GetNumIndices() == 2);
+         REQUIRE(Kernel.GetNumContractionIndices() == 1);
          REQUIRE(Kernel.GetNumVars() == 3);
          REQUIRE(Kernel.GetNumInputVars() == 2);
          REQUIRE(Kernel.GetVarDimLoopNum(0, 0) == 1);
@@ -145,11 +106,7 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.IsVarDependentOnLoop(0, 0));
          REQUIRE(Kernel.IsVarDependentOnLoop(0, 1));
          REQUIRE(Kernel.IsVarDependentOnLoop(1, 0));
-         REQUIRE(!Kernel.IsVarDependentOnLoop(1, 1));
-         REQUIRE(Kernel.GetOutputStorageReqForInnerLoops(1) == 1);
-         REQUIRE(Kernel.GetOutputStorageReqForInnerLoops(2) == 3);
-         REQUIRE(Kernel.GetInputStorageReqForInnerLoops(1) == 4);
-         REQUIRE(Kernel.GetInputStorageReqForInnerLoops(2) == 12);         
+         REQUIRE(!Kernel.IsVarDependentOnLoop(1, 1));   
       }      
    }
 
@@ -194,22 +151,9 @@ TEST_CASE("TensorKernel operations", "[TensorKernel]")
          REQUIRE(Kernel.ContractionIndexNames[2] == "n");
          REQUIRE(Kernel.ContractionIndexNames[3] == "k2");
          REQUIRE(Kernel.ContractionIndexNames[4] == "k3");
-      }
 
-      SECTION("Dimensions")
-      {
-         Tensor S(10, 5, 5, 5, 5, 5, 5);
-         Tensor Btilde1(5, 5, 5, 3, 3);
-         Tensor Btilde2(5, 5, 5, 3, 3);
-         Tensor Btilde3(5, 5, 5, 3, 3);
-         Tensor D(10, 5, 5, 5, 3, 3);
-         std::vector<Tensor*> inputs = {&Btilde1, &Btilde2, &Btilde3, &D};
-         Kernel.AttachTensors(&S, inputs);
-         REQUIRE(Kernel.GetFlatIdxSize() == 175781250);
-         REQUIRE(Kernel.GetOutIdxSize() == 156250);
-         REQUIRE(Kernel.GetContIdxSize() == 1125);
-         REQUIRE(Kernel.GetNumLoops() == 12);
-         REQUIRE(Kernel.GetNumContractionLoops() == 5);
+         REQUIRE(Kernel.GetNumIndices() == 12);
+         REQUIRE(Kernel.GetNumContractionIndices() == 5);
          REQUIRE(Kernel.GetNumVars() == 5);
          REQUIRE(Kernel.GetNumInputVars() == 4);     
       }            

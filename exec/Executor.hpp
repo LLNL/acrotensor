@@ -6,6 +6,3 @@
 #include "KernelExecutor.hpp"
 #include "CPUInterpretedExecutor.hpp"
 #include "OneOutPerThreadExecutor.hpp"
-#include "MultiOutPerThreadExecutor.hpp"
-#include "SMChunkPerBlockExecutor.hpp"
-#include "IndexCachedExecutor.hpp"

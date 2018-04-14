@@ -8,38 +8,22 @@
 
 #include <string>
 #include "Tensor.hpp"
-#include "TensorKernel.hpp"
+#include "DimensionedMultiKernel.hpp"
 
 namespace acro
 {
 
-class TensorKernel;
-
 class KernelExecutor
 {
     public:
-    KernelExecutor(std::string &kernelstr) : Kernel(kernelstr), TheCudaStream(NULL) {};
-    void operator()(Tensor &out, Tensor &in1);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7);
-    void operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7, Tensor &in8);
-    void operator()(Tensor *out, std::vector<Tensor*> &inputs);
+    KernelExecutor(DimensionedMultiKernel *multi_kernel);
+    static KernelExecutor *Create(std::string exec_type, DimensionedMultiKernel *multi_kernel);
+    ~KernelExecutor();
 
-    std::string GetImplementation(Tensor &out, Tensor &in1);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7);
-    std::string GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7, Tensor &in8);
-
-    virtual std::string GetImplementation(Tensor *out, std::vector<Tensor*> &inputs) = 0;
-    virtual void ExecuteKernel(Tensor *out, std::vector<Tensor*> &inputs) = 0;
+    virtual std::string GetImplementation() = 0;
+    virtual std::string GetExecType() = 0;
+    virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs) = 0;
+    virtual void ExecuteMulti(std::vector<Tensor*> output, std::vector<std::vector<Tensor*> > &inputs);
 
     inline int ComputeRawIdx(const Tensor &T, const int *RESTRICT I, const std::vector<int> &loop_nums);
 
@@ -48,10 +32,14 @@ class KernelExecutor
 #endif
 
     protected:
-    void MoveTensorsFromGPU(Tensor *out, std::vector<Tensor*> &inputs);
-    void MoveTensorsToGPU(Tensor *out, std::vector<Tensor*> &inputs);
-    void MoveTensorsToOutputLocation(Tensor *out, std::vector<Tensor*> &inputs);
-    TensorKernel Kernel;
+
+    void MoveTensorsFromGPU(Tensor *output, std::vector<Tensor*> &inputs);
+    void MoveTensorsToGPU(Tensor *output, std::vector<Tensor*> &inputs);
+    void MoveTensorsToOutputLocation(Tensor *output, std::vector<Tensor*> &inputs);
+    DimensionedMultiKernel *MultiKernel;
+    DimensionedKernel *FirstKernel;
+    std::vector<DimensionedMultiKernel*> SubKernels;
+    std::vector<KernelExecutor*> SubExecutors;
 
 #ifdef ACRO_HAVE_CUDA
     cudaStream_t TheCudaStream;

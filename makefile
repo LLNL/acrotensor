@@ -7,7 +7,7 @@
 JUNK := $(shell if [ ! -f "config/config.mk" ];then cp config/defaults.mk config/config.mk; fi)
 include config/config.mk
 
-DIRS = exec tensor util ops
+DIRS = exec tensor util ops kernel
 SOURCE_FILES = $(foreach dir,$(DIRS),$(wildcard $(dir)/*.cpp))
 INCLUDE_FILES = $(foreach dir,$(DIRS),$(wildcard $(dir)/*.hpp)) AcroTensor.hpp
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)

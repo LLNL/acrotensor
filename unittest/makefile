@@ -11,7 +11,7 @@ CXX_FLAGS   = -O3 -fopenmp=libomp -std=c++11 -stdlib=libc++
 CCC = $(CXX) $(CXX_FLAGS)
 LD_FLAGS = -Wl,-rpath,$(ACRO_BASEDIR)
 
-DIRS = exec tensor util
+DIRS = exec tensor util kernel
 SRCDIRS = $(foreach dir,$(DIRS),$(ACRO_BASEDIR)/$(dir))
 INCLUDES = -I. $(foreach dir,$(SRCDIRS),-I$(dir)) -I../inc
 

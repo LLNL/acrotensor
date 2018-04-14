@@ -3,222 +3,36 @@
 //All rights reserved.
 //This file is part of Acrotensor. For details, see https://github.com/LLNL/acrotensor.
 
-#include "KernelExecutor.hpp"
+#include "Executor.hpp"
 #include "TensorKernel.hpp"
-#include <cctype>
-#include <algorithm>
-#include <iostream>
 
 namespace acro
 {
 
-void KernelExecutor::operator()(Tensor &out, Tensor &in1)
+
+KernelExecutor::KernelExecutor(DimensionedMultiKernel *multi_kernel)
 {
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    input_tensors.push_back(&in6);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    input_tensors.push_back(&in6);
-    input_tensors.push_back(&in7);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7, Tensor &in8)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    input_tensors.push_back(&in6);
-    input_tensors.push_back(&in7);
-    input_tensors.push_back(&in8);
-    (*this)(&out, input_tensors);
-}
-
-
-void KernelExecutor::operator()(Tensor *out, std::vector<Tensor*> &inputs)
-{
-    ACROBATIC_ASSERT(out->GetRank() == Kernel.OutputVar.IndexNames.size(), 
-                     "Tensor rank of the output var in the kernel does not match the rank of the actual tensor.\n"
-                    +"Kernel:  " + Kernel.KernelStr);
-    ACROBATIC_ASSERT(inputs.size() == Kernel.InputVars.size());
-    for (int i = 0; i < inputs.size(); ++i)
+    MultiKernel = multi_kernel;
+    if (MultiKernel->Kernels.size() > 0)
     {
-        ACROBATIC_ASSERT(inputs[i]->GetRank() == Kernel.InputVars[i]->IndexNames.size(),
-                         "Tensor rank of input var " + std::to_string(i) +
-                         " does not match the rank of the actual tensor.\n" +
-                        +"Kernel:  " + Kernel.KernelStr);
+        FirstKernel = MultiKernel->Kernels[0];
+    }
+    else
+    {
+        FirstKernel = NULL;
     }
 
-    ExecuteKernel(out, inputs);
+#ifdef ACRO_HAVE_CUDA
+    TheCudaStream = NULL;
+#endif
 }
 
 
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1)
+void KernelExecutor::MoveTensorsFromGPU(Tensor *output, std::vector<Tensor*> &inputs)
 {
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    input_tensors.push_back(&in6);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    input_tensors.push_back(&in6);
-    input_tensors.push_back(&in7);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-std::string KernelExecutor::GetImplementation(Tensor &out, Tensor &in1, Tensor &in2, Tensor &in3, Tensor &in4, Tensor &in5, Tensor &in6, Tensor &in7, Tensor &in8)
-{
-    std::vector<Tensor*> input_tensors;
-    input_tensors.push_back(&in1);
-    input_tensors.push_back(&in2);
-    input_tensors.push_back(&in3);
-    input_tensors.push_back(&in4);
-    input_tensors.push_back(&in5);
-    input_tensors.push_back(&in6);
-    input_tensors.push_back(&in7);
-    input_tensors.push_back(&in8);
-    return GetImplementation(&out, input_tensors);
-}
-
-
-void KernelExecutor::MoveTensorsFromGPU(Tensor *out, std::vector<Tensor*> &inputs)
-{
-    if (out->IsOnGPU())
+    if (output->IsOnGPU())
     {
-        out->MoveFromGPU();
+        output->MoveFromGPU();
     }
 
     for (int i = 0; i < inputs.size(); ++i)
@@ -231,15 +45,15 @@ void KernelExecutor::MoveTensorsFromGPU(Tensor *out, std::vector<Tensor*> &input
 }
 
 
-void KernelExecutor::MoveTensorsToGPU(Tensor *out, std::vector<Tensor*> &inputs)
+void KernelExecutor::MoveTensorsToGPU(Tensor *output, std::vector<Tensor*> &inputs)
 {
-    if (!out->IsOnGPU())
+    if (!output->IsOnGPU())
     {
-        if (!out->IsMappedToGPU())
+        if (!output->IsMappedToGPU())
         {
-            out->MapToGPU();
+            output->MapToGPU();
         }
-        out->MoveToGPU();
+        output->MoveToGPU();
     }
 
     for (int i = 0; i < inputs.size(); ++i)
@@ -256,17 +70,64 @@ void KernelExecutor::MoveTensorsToGPU(Tensor *out, std::vector<Tensor*> &inputs)
 }
 
 
-void KernelExecutor::MoveTensorsToOutputLocation(Tensor *out, std::vector<Tensor*> &inputs)
+void KernelExecutor::MoveTensorsToOutputLocation(Tensor *output, std::vector<Tensor*> &inputs)
 {
-    if (out->IsOnGPU())
+    if (output->IsOnGPU())
     {
-        MoveTensorsToGPU(out, inputs);
+        MoveTensorsToGPU(output, inputs);
     }
     else
     {
-        MoveTensorsFromGPU(out, inputs);
+        MoveTensorsFromGPU(output, inputs);
     }
 }
 
+
+void KernelExecutor::ExecuteMulti(std::vector<Tensor*> output, std::vector<std::vector<Tensor*> > &inputs)
+{
+    if (SubExecutors.size() != MultiKernel->Kernels.size())
+    {
+        SubKernels.resize(MultiKernel->Kernels.size());
+        SubExecutors.resize(MultiKernel->Kernels.size());
+        for (int ki = 0; ki < MultiKernel->Kernels.size(); ++ki)
+        {
+            SubKernels[ki] = new DimensionedMultiKernel(MultiKernel->Kernels[ki]);
+            SubExecutors[ki] = KernelExecutor::Create(GetExecType(), SubKernels[ki]);
+        }
+    }
+
+    for (int ki = 0; ki < MultiKernel->Kernels.size(); ++ki)
+    {
+        SubExecutors[ki]->ExecuteSingle(output[ki], inputs[ki]);
+    }
+}
+
+
+KernelExecutor *KernelExecutor::Create(std::string exec_type, DimensionedMultiKernel *multi_kernel)
+{
+    if (exec_type == "CPUInterpreted")
+    {
+        return new CPUInterpretedExecutor(multi_kernel);    
+    }
+#ifdef ACRO_HAVE_CUDA    
+    if (exec_type == "OneOutPerThread")
+    {
+        return new OneOutPerThreadExecutor(multi_kernel);
+    }
+#endif
+
+    ACROBATIC_ASSERT(false, "Executor type does not exist:  " + exec_type);
+    return NULL;
+}
+
+
+KernelExecutor::~KernelExecutor()
+{
+    for (int ki = 0; ki < SubExecutors.size(); ++ki)
+    {
+        delete SubKernels[ki];
+        delete SubExecutors[ki];
+    }
+}
 
 }

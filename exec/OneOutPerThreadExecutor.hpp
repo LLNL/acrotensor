@@ -17,19 +17,18 @@ namespace acro
 class OneOutPerThreadExecutor : public KernelExecutor
 {
     public:
-    OneOutPerThreadExecutor(std::string &kernelstr);
+    OneOutPerThreadExecutor(DimensionedMultiKernel *multi_kernel);
     ~OneOutPerThreadExecutor();
-    virtual void ExecuteKernel(Tensor *output, std::vector<Tensor*> &inputs);
-    virtual std::string GetImplementation(Tensor *out, std::vector<Tensor*> &inputs);
+    virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs);
+    virtual std::string GetImplementation();
+    virtual std::string GetExecType() {return "OneOutPerThread";}
 
     private:
-    void ExecuteLoopsCuda();
-
-    CudaKernel *GenerateCudaKernel();
+    void GenerateCudaKernel();
     void GetSharedMemInvars(std::vector<bool> &sharedmem_invars);
     std::string GetVarIndexString(int vari);
     cudaDeviceProp CudaDeviceProp;
-    std::map<std::vector<int>, CudaKernel* > CudaKernelMap;
+    CudaKernel *TheCudaKernel;
 };
 
 }

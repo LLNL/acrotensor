@@ -6,26 +6,19 @@
 #include "catch.hpp"
 #include "AcroTensor.hpp"
 #include <iostream>
-#include <cstdlib>
+#include <random>
 
 using namespace acro;
 
 void test_suite_on_cpu_engine(TensorEngine &TE);
 void test_suite_on_gpu_engine(TensorEngine &TE);
-double rand_double();
+
 
 TEST_CASE("TensorEngine", "[TensorEngine]")
 {
    SECTION("CPUInterpretedExecutor")
    {
       TensorEngine TE("CPUInterpreted");
-      test_suite_on_cpu_engine(TE);
-   }
-
-
-   SECTION("IndexCachedExecutor")
-   {
-      TensorEngine TE("IndexCached");
       test_suite_on_cpu_engine(TE);
    }
 
@@ -36,19 +29,6 @@ TEST_CASE("TensorEngine", "[TensorEngine]")
          TensorEngine TE("OneOutPerThread");
          test_suite_on_gpu_engine(TE);
       }
-
-
-      SECTION("SMChunkPerBlockExecutor")
-      {
-         TensorEngine TE("SMChunkPerBlock");
-         test_suite_on_gpu_engine(TE);
-      }
-
-      SECTION("MultiOutPerThreadExecutor")
-      {
-         TensorEngine TE("MultiOutPerThread");
-         test_suite_on_gpu_engine(TE);
-      }      
    } 
 }
 
@@ -56,13 +36,16 @@ TEST_CASE("TensorEngine", "[TensorEngine]")
 void test_suite_on_cpu_engine(TensorEngine &TE)
 {
    Tensor T1out_3(3), T2out_3_3(3, 3), T1_3(3), T1_2(2), T2_3_3(3,3);
+   std::random_device rd;
+   std::mt19937 twister(rd());
+   std::uniform_real_distribution<double> random(0.0, 1.0);   
 
    SECTION("Assert Compatible Dimensions")
    {
-      REQUIRE_NOTHROW(TE["A_i=B_iC_i"](T1out_3, T1_3, T1_3));
-      REQUIRE_THROWS(TE["A_i=B_iC_i"](T1out_3, T1_3, T1_2));
-      REQUIRE_NOTHROW(TE["A_i=B_i_jC_i"](T1out_3, T2_3_3, T1_3));
-      REQUIRE_THROWS(TE["A_i=B_i_jC_i"](T1out_3, T2_3_3, T1_2));
+      REQUIRE_NOTHROW(TE("A_i=B_iC_i", T1out_3, T1_3, T1_3));
+      REQUIRE_THROWS(TE("A_i=B_iC_i", T1out_3, T1_3, T1_2));
+      REQUIRE_NOTHROW(TE("A_i=B_i_jC_i", T1out_3, T2_3_3, T1_3));
+      REQUIRE_THROWS(TE("A_i=B_i_jC_i", T1out_3, T2_3_3, T1_2));
    }
 
    SECTION("Basic computations")
@@ -72,20 +55,20 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
 
       //Simple as it gets
       T1_3(0) = 1.0; T1_3(1) = 2.0; T1_3(2) = 3.0;
-      TE["A_i=B_i"](T1out_3, T1_3);
+      TE("A_i=B_i", T1out_3, T1_3);
       for (int d = 0; d < 3; ++d) {
          REQUIRE(T1out_3(d) == Approx(T1_3(d)));
       }
   
       //Get the diagonal
       T2_3_3(0,0) = 4.0; T2_3_3(1,1) = 5.0; T2_3_3(2,2) = 6.0;
-      TE["A_i=B_i_i"](T1out_3, T2_3_3);
+      TE("A_i=B_i_i", T1out_3, T2_3_3);
       for (int d = 0; d < 3; ++d) {
          REQUIRE(T1out_3(d) == Approx(T2_3_3(d,d)));
       }
 
       //Contract the diagonal and broadcast it to all of A
-      TE["A_i=B_j_j"](T1out_3, T2_3_3);
+      TE("A_i=B_j_j", T1out_3, T2_3_3);
       for (int d = 0; d < 3; ++d) {
          REQUIRE(T1out_3(d) == Approx(T2_3_3(0,0) + T2_3_3(1,1) + T2_3_3(2,2)));
       }
@@ -93,7 +76,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
       //Matvec
       T2_3_3.Set(1.0);
       T1_3.Set(1.0);
-      TE["A_i = C_i_j B_j"](T1out_3, T2_3_3, T1_3);
+      TE("A_i = C_i_j B_j", T1out_3, T2_3_3, T1_3);
       for (int d = 0; d < 3; ++d) {
          REQUIRE(T1out_3(d) == Approx(3.0));
       }
@@ -103,7 +86,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
       {
          T2_3_3[flatidx] = double(flatidx);
       }
-      TE["A_i_j=B_j_i"](T2out_3_3, T2_3_3);
+      TE("A_i_j=B_j_i", T2out_3_3, T2_3_3);
       for (int i = 0; i < 3; ++i)
       {
          for (int j = 0; j < 3; ++j)
@@ -115,7 +98,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
       //Try a 5D contraction with singletons
       Tensor T5(1, 2, 3, 1, 5);
       T5.Set(1.0);
-      TE["A_i=B_j_k_l_m_n"](T1out_3, T5);
+      TE("A_i=B_j_k_l_m_n", T1out_3, T5);
       REQUIRE(T1out_3(0) == Approx(30.0));
    }
 
@@ -153,14 +136,14 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
          {
             for (int b = 0; b < TB1.GetDim(0); ++b)
             {
-               TB1(b,0,0) = rand_double() + 1e-20;
+               TB1(b,0,0) = random(twister) + 1e-20;
             }
             //TE.BatchMatrixInvDet(TBOUT1, DB1, TB1);
             TE.BatchMatrixInverse(TBOUT1, TB1);
             TE.BatchMatrixDet(DB1, TB1);
             TE.BatchMatrixDet(DB2, TBOUT1);
-            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB1, TBOUT1, TB1);
-            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
+            TE("I_b_i_k = TI_b_i_j T_b_j_k", IB1, TBOUT1, TB1);
+            TE("I_b = DI_b D_b", DB3, DB2, DB1);
 
             for (int b = 0; b < IB1.GetDim(0); ++b)
             {
@@ -173,15 +156,15 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
          {
             for (int b = 0; b < TB2.GetDim(0); ++b)
             {
-               TB2(b, 0, 0) = rand_double() + 4.0;
-               TB2(b, 0, 1) = rand_double();
-               TB2(b, 1, 0) = rand_double();
-               TB2(b, 1, 1) = rand_double() + 4.0;
+               TB2(b, 0, 0) = random(twister) + 4.0;
+               TB2(b, 0, 1) = random(twister);
+               TB2(b, 1, 0) = random(twister);
+               TB2(b, 1, 1) = random(twister) + 4.0;
             }
             TE.BatchMatrixInvDet(TBOUT2, DB1, TB2);
             TE.BatchMatrixDet(DB2, TBOUT2);
-            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB2, TBOUT2, TB2);
-            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
+            TE("I_b_i_k = TI_b_i_j T_b_j_k", IB2, TBOUT2, TB2);
+            TE("I_b = DI_b D_b", DB3, DB2, DB1);
 
             for (int b = 0; b < IB2.GetDim(0); ++b)
             {
@@ -197,20 +180,20 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
          {
             for (int b = 0; b < TB3.GetDim(0); ++b)
             {
-               TB3(b, 0, 0) = rand_double() + 4.0;
-               TB3(b, 0, 1) = rand_double();
-               TB3(b, 0, 2) = rand_double();
+               TB3(b, 0, 0) = random(twister) + 4.0;
+               TB3(b, 0, 1) = random(twister);
+               TB3(b, 0, 2) = random(twister);
                TB3(b, 1, 0) = TB3(b, 0, 1);
-               TB3(b, 1, 1) = rand_double() + 4.0;
-               TB3(b, 1, 2) = rand_double();
+               TB3(b, 1, 1) = random(twister) + 4.0;
+               TB3(b, 1, 2) = random(twister);
                TB3(b, 2, 0) = TB3(b, 0, 2);
                TB3(b, 2, 1) = TB3(b, 1, 2);
-               TB3(b, 2, 2) = rand_double() + 4.0;
+               TB3(b, 2, 2) = random(twister) + 4.0;
             }
             TE.BatchMatrixInvDet(TBOUT3, DB1, TB3);
             TE.BatchMatrixDet(DB2, TBOUT3);
-            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB3, TBOUT3, TB3);
-            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
+            TE("I_b_i_k = TI_b_i_j T_b_j_k", IB3, TBOUT3, TB3);
+            TE("I_b = DI_b D_b", DB3, DB2, DB1);
 
             for (int b = 0; b < IB3.GetDim(0); ++b)
             {
@@ -238,6 +221,10 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
 
 void test_suite_on_gpu_engine(TensorEngine &TE)
 {
+   std::random_device rd;
+   std::mt19937 twister(rd());
+   std::uniform_real_distribution<double> random(0.0, 1.0);  
+
    SECTION("GPU Computations")
    {
       SECTION("Autotransfer to GPU")
@@ -246,10 +233,10 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          Tensor B(3);
 
          B(0) = 1.0; B(1) = 2.0; B(2) = 3.0;
-         TE["A_i=B_i"](A, B);
+         TE("A_i=B_i", A, B);
          A.MoveFromGPU();
          if (A(0) != Approx(B(0)))
-            std::cout << TE["A_i=B_i"].GetImplementation(A, B) << std::endl;
+            std::cout << TE.GetImplementation("A_i=B_i", A, B) << std::endl;
          REQUIRE(A(0) == Approx(B(0)));
          REQUIRE(A(1) == Approx(B(1)));
          REQUIRE(A(2) == Approx(B(2)));
@@ -265,7 +252,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          Tensor B(3);
 
          B(0) = 1.0; B(1) = 2.0; B(2) = 3.0;
-         TE["A_i=B_i"](A, B);
+         TE("A_i=B_i", A, B);
          A.MoveFromGPU();
          CHECK(A(0) == Approx(B(0)));
          CHECK(A(1) == Approx(B(1)));
@@ -283,7 +270,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          acroCudaErrorCheck(cudaMalloc((void**)&a_device_data, 125*sizeof(double)));
          Tensor A(125, a_data, a_device_data, false);
          Tensor B(125);
-         TE["B_i=A_i"](B, A);
+         TE("B_i=A_i", B, A);
          A.MoveFromGPU();
          B.MoveFromGPU();
          for (int i = 0; i < 125; ++i)
@@ -306,7 +293,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          B(0) = 1.0; B(1) = 2.0; B(2) = 3.0;
          A.SwitchToGPU();
          B.MoveToGPU();
-         TE["A_i=B_i"](A, B);
+         TE("A_i=B_i", A, B);
          A.MoveFromGPU();
          CHECK(A(0) == Approx(B(0)));
          CHECK(A(1) == Approx(B(1)));
@@ -316,10 +303,10 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          B.Set(1.0);    //B is still on the GPU
          C.Set(1.0);
          C.MoveToGPU();
-         TE["A_i = C_i_j B_j"](A, C, B);
+         TE("A_i = C_i_j B_j", A, C, B);
          A.MoveFromGPU();
          if (A(0) != Approx(3.0))
-            std::cout << TE["A_i = C_i_j B_j"].GetImplementation(A, C, B) << std::endl;
+            std::cout << TE.GetImplementation("A_i = C_i_j B_j",A, C, B) << std::endl;
          CHECK(A(0) == Approx(3.0));
          CHECK(A(1) == Approx(3.0));
          CHECK(A(2) == Approx(3.0));
@@ -339,7 +326,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          B.MoveToGPU();
          A.MapToGPU();
          A.SwitchToGPU();
-         TE["A_i_j=B_j_i"](A, B);
+         TE("A_i_j=B_j_i", A, B);
          A.MoveFromGPU();
          B.SwitchFromGPU();
          for (int i = 0; i < 4; ++i)
@@ -387,8 +374,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             T.MoveToGPU();
             W.MoveToGPU();
             B.MoveToGPU();
-            TE["D_e_k1_k2 = W_k1_k2 T_e_k1_k2"](D,W,T);
-            TE["M_e_i1_i2_j1_j2=B_k1_i1 B_k1_j1 B_k2_i2 B_k2_j2 D_e_k1_k2"](M,B,B,B,B,D);
+            TE("D_e_k1_k2 = W_k1_k2 T_e_k1_k2", D,W,T);
+            TE("M_e_i1_i2_j1_j2=B_k1_i1 B_k1_j1 B_k2_i2 B_k2_j2 D_e_k1_k2", M,B,B,B,B,D);
 
             M.MoveFromGPU();
             D.MoveFromGPU();
@@ -438,7 +425,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             if (massBadCount > 0)
             {
                std::cout << "Number bad indices:  " << massBadCount << std::endl;
-               std::cout << TE["M_e_i1_i2_j1_j2=B_k1_i1 B_k1_j1 B_k2_i2 B_k2_j2 D_e_k1_k2"].GetImplementation(M,B,B,B,B,D);
+               std::cout << TE.GetImplementation("M_e_i1_i2_j1_j2=B_k1_i1 B_k1_j1 B_k2_i2 B_k2_j2 D_e_k1_k2",M,B,B,B,B,D);
             }
             REQUIRE(massBadCount == 0);  
          }
@@ -466,8 +453,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             SliceTensor Z1(Z, 0), Z2(Z, 1);
 
             //U1_e_k1_k2 = G_k1_i1 B_k2_i2 X_e_i1_i2
-            TE["BX_e_i1_k2 = B_k2_i2 X_e_i1_i2"](T, B, X);
-            TE["U1_e_k1_k2 = G_k1_i1 BX_e_i1_k2"](U1, G, T);
+            TE("BX_e_i1_k2 = B_k2_i2 X_e_i1_i2", T, B, X);
+            TE("U1_e_k1_k2 = G_k1_i1 BX_e_i1_k2", U1, G, T);
             U1.MoveFromGPU();
             for (int e = 0; e < 5; ++ e)
             {
@@ -485,8 +472,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             }            
 
             //U2_e_k1_k2 = B_k1_i1 G_k2_i2 X_e_i1_i2
-            TE["GX_e_i1_k2 = G_k2_i2 X_e_i1_i2"](T, G, X);
-            TE["U2_e_k1_k2 = B_k1_i1 GX_e_i1_k2"](U2, B, T);
+            TE("GX_e_i1_k2 = G_k2_i2 X_e_i1_i2", T, G, X);
+            TE("U2_e_k1_k2 = B_k1_i1 GX_e_i1_k2", U2, B, T);
             U2.MoveFromGPU();
             for (int e = 0; e < 5; ++ e)
             {
@@ -504,7 +491,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             } 
 
 
-            TE["Z_m_e_k1_k2 = D_e_m_n_k1_k2 U_n_e_k1_k2"](Z, D, U);
+            TE("Z_m_e_k1_k2 = D_e_m_n_k1_k2 U_n_e_k1_k2", Z, D, U);
             Z.MoveFromGPU();
             for (int m = 0; m < 2; ++m)
             {
@@ -519,7 +506,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
                            Zsum += D(e,m,n,k1,k2)*U(n,e,k1,k2);
 
                         if (Z(m,e,k1,k2) != Approx(Zsum))
-                           std::cout << TE["Z_m_e_k1_k2 = D_e_m_n_k1_k2 U_n_e_k1_k2"].GetImplementation(Z, D, U);
+                           std::cout << TE.GetImplementation("Z_m_e_k1_k2 = D_e_m_n_k1_k2 U_n_e_k1_k2",Z, D, U);
                         REQUIRE(Z(m,e,k1,k2) == Approx(Zsum));
                      }
                   }
@@ -527,8 +514,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             }
 
             //Y_e_i1_i2 += G_k1_i1 B_k2_i2 Z1_e_k1_k2
-            TE["BZ1_e_i2_k1 = B_k2_i2 Z1_e_k1_k2"](T, B, Z1);
-            TE["Y_e_i1_i2 = G_k1_i1 BZ1_e_i2_k1"](Y, G, T);
+            TE("BZ1_e_i2_k1 = B_k2_i2 Z1_e_k1_k2", T, B, Z1);
+            TE("Y_e_i1_i2 = G_k1_i1 BZ1_e_i2_k1", Y, G, T);
             Y.MoveFromGPU();
             {
                for (int e = 0; e < 5; ++ e)
@@ -548,8 +535,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             }
 
             //Y_e_i1_i2 += B_k1_i1 G_k2_i2 Z2_e_k1_k2
-            TE["GZ2_e_i2_k1 = G_k2_i2 Z2_e_k1_k2"](T, G, Z2);
-            TE["Y_e_i1_i2 = B_k1_i1 GZ2_e_i2_k1"](Y, B, T);
+            TE("GZ2_e_i2_k1 = G_k2_i2 Z2_e_k1_k2", T, G, Z2);
+            TE("Y_e_i1_i2 = B_k1_i1 GZ2_e_i2_k1", Y, B, T);
             Y.MoveFromGPU();
             {
                for (int e = 0; e < 5; ++ e)
@@ -602,7 +589,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             Btilde3.MoveToGPU();
             D.MoveToGPU();
 
-            TE[kernel_str](S, Btilde1, Btilde2, Btilde3, D);
+            TE(kernel_str, S, Btilde1, Btilde2, Btilde3, D);
 
             S.MoveFromGPU();
             Btilde1.MoveFromGPU();
@@ -638,43 +625,9 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             {
                std::vector<Tensor*> inputs = {&Btilde1, &Btilde2, &Btilde3, &D};
                std::cout << "Number bad indices:  " << stiff3DBadCount << std::endl;
-               std::cout << TE[kernel_str].GetImplementation(&S, inputs);
+               std::cout << TE.GetImplementation(kernel_str, &S, inputs);
             }              
          }
-
-
-
-         /*SECTION("Async launching")
-         {
-            Tensor A1(256, 256);
-            Tensor A2(256, 256);
-            Tensor B(256, 256);
-            Tensor C(256, 256);
-            Tensor D(256);
-
-            for (int i = 0; i < B.GetSize(); ++i)
-               B[i] = double(i);
-
-            for (int i = 0; i < C.GetSize(); ++i)
-               C[i] = 2*double(i) - 256.0;
-
-            for (int i = 0; i < D.GetSize(); ++i)
-               D[i] = 256.0 - double(i);
-
-            TE.SetAsyncLaunch();
-            TE["A_i_j = B_i_j D_j"](A1, B, D);
-            TE["A_i_j += C_i_j D_i"](A1, C, D);
-            TE.ReSyncLaunch();
-
-            TE["A_i_j = B_i_j D_j"](A2, B, D);
-            TE["A_i_j += C_i_j D_i"](A2, C, D);
-
-            A1.MoveFromGPU();
-            A2.MoveFromGPU();
-            for (int i = 0; i < A1.GetSize(); ++i)
-               REQUIRE(A1[i] == Approx(A2[i]));
-
-         }*/
       }
    }
 
@@ -693,12 +646,12 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          {
             for (int b = 0; b < TB1.GetDim(0); ++b)
             {
-               TB1(b,0,0) = rand_double() + 1e-20;
+               TB1(b,0,0) = random(twister) + 1e-20;
             }
             TE.BatchMatrixInvDet(TBOUT1, DB1, TB1);
             TE.BatchMatrixDet(DB2, TBOUT1);
-            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB1, TBOUT1, TB1);
-            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
+            TE("I_b_i_k = TI_b_i_j T_b_j_k", IB1, TBOUT1, TB1);
+            TE("I_b = DI_b D_b", DB3, DB2, DB1);
 
             IB1.MoveFromGPU();
             DB3.MoveFromGPU();
@@ -713,15 +666,15 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          {
             for (int b = 0; b < TB2.GetDim(0); ++b)
             {
-               TB2(b, 0, 0) = rand_double() + 4.0;
-               TB2(b, 0, 1) = rand_double();
+               TB2(b, 0, 0) = random(twister) + 4.0;
+               TB2(b, 0, 1) = random(twister);
                TB2(b, 1, 0) = TB2(b, 0, 1);
-               TB2(b, 1, 1) = rand_double() + 4.0;
+               TB2(b, 1, 1) = random(twister) + 4.0;
             }
             TE.BatchMatrixInvDet(TBOUT2, DB1, TB2);
             TE.BatchMatrixDet(DB2, TBOUT2);
-            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB2, TBOUT2, TB2);
-            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
+            TE("I_b_i_k = TI_b_i_j T_b_j_k", IB2, TBOUT2, TB2);
+            TE("I_b = DI_b D_b", DB3, DB2, DB1);
 
             IB2.MoveFromGPU();
             DB3.MoveFromGPU();
@@ -739,20 +692,20 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          {
             for (int b = 0; b < TB3.GetDim(0); ++b)
             {
-               TB3(b, 0, 0) = rand_double() + 4.0;
-               TB3(b, 0, 1) = rand_double();
-               TB3(b, 0, 2) = rand_double();
+               TB3(b, 0, 0) = random(twister) + 4.0;
+               TB3(b, 0, 1) = random(twister);
+               TB3(b, 0, 2) = random(twister);
                TB3(b, 1, 0) = TB3(b, 0, 1);
-               TB3(b, 1, 1) = rand_double() + 4.0;
-               TB3(b, 1, 2) = rand_double();
+               TB3(b, 1, 1) = random(twister) + 4.0;
+               TB3(b, 1, 2) = random(twister);
                TB3(b, 2, 0) = TB3(b, 0, 2);
                TB3(b, 2, 1) = TB3(b, 1, 2);
-               TB3(b, 2, 2) = rand_double() + 4.0;
+               TB3(b, 2, 2) = random(twister) + 4.0;
             }
             TE.BatchMatrixInvDet(TBOUT3, DB1, TB3);
             TE.BatchMatrixDet(DB2, TBOUT3);
-            TE["I_b_i_k = TI_b_i_j T_b_j_k"](IB3, TBOUT3, TB3);
-            TE["I_b = DI_b D_b"](DB3, DB2, DB1);
+            TE("I_b_i_k = TI_b_i_j T_b_j_k", IB3, TBOUT3, TB3);
+            TE("I_b = DI_b D_b", DB3, DB2, DB1);
 
             IB3.MoveFromGPU();
             DB3.MoveFromGPU();
@@ -772,11 +725,4 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          }         
       }
    }   
-}
-
-
-
-double rand_double()
-{
-   return static_cast<double>(std::rand()) / static_cast<double>(RAND_MAX);
 }

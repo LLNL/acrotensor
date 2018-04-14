@@ -15,25 +15,26 @@ namespace acro
 class CPUInterpretedExecutor : public KernelExecutor
 {
     public:
-    CPUInterpretedExecutor(std::string &kernelstr);
+    CPUInterpretedExecutor(DimensionedMultiKernel *multi_kernel);
     ~CPUInterpretedExecutor();
-    virtual void ExecuteKernel(Tensor *output, std::vector<Tensor*> &inputs);
-    virtual std::string GetImplementation(Tensor *out, std::vector<Tensor*> &inputs);
+    virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs);
+    virtual std::string GetImplementation();
+    virtual std::string GetExecType() {return "CPUInterpreted";}
 
     private:
-    void Execute1Loops();
-    void Execute2Loops();
-    void Execute3Loops();
-    void Execute4Loops();
-    void Execute5Loops();
-    void Execute6Loops();
-    void Execute7Loops();
-    void Execute8Loops();
-    void Execute9Loops();
-    void Execute10Loops();
-    void Execute11Loops();
-    void Execute12Loops();
-    void ExecuteArbitraryLoops();
+    void Execute1Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute2Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute3Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute4Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute5Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute6Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute7Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute8Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute9Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute10Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute11Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute12Loops(Tensor *output, std::vector<Tensor*> &inputs);
+    void ExecuteArbitraryLoops(Tensor *output, std::vector<Tensor*> &inputs);
 
     inline double ComputeRHS(const std::vector<Tensor*> &inputs, const int *RESTRICT I);
 };
@@ -41,10 +42,10 @@ class CPUInterpretedExecutor : public KernelExecutor
 
 inline double CPUInterpretedExecutor::ComputeRHS(const std::vector<Tensor*> &inputs, const int *RESTRICT I)
 {
-    double rhs_val = (*inputs[0])[ComputeRawIdx(*inputs[0], I, Kernel.InputVars[0]->LoopNums)];
+    double rhs_val = (*inputs[0])[ComputeRawIdx(*inputs[0], I, FirstKernel->InputVars[0]->LoopNums)];
     for  (unsigned int vari = 1; vari < inputs.size(); ++vari)
     {
-        rhs_val *= (*inputs[vari])[ComputeRawIdx(*inputs[vari], I, Kernel.InputVars[vari]->LoopNums)];
+        rhs_val *= (*inputs[vari])[ComputeRawIdx(*inputs[vari], I, FirstKernel->InputVars[vari]->LoopNums)];
     }
     return rhs_val;
 }
