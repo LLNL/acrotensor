@@ -17,7 +17,8 @@ TensorEngine::TensorEngine()
     std::string exec_type("CPUInterpreted");
     Ops = NULL;
     SetExecutorType(exec_type);
-    TheCudaStream = NULL;    
+    TheCudaStream = NULL;
+    IsMultiKernelLaunch = false;
 }
 
 
@@ -27,6 +28,7 @@ TensorEngine::TensorEngine(const char *bare_exec_type)
     Ops = NULL;
     SetExecutorType(exec_type);
     TheCudaStream = NULL;
+    IsMultiKernelLaunch = false;
 }
 
 
@@ -34,7 +36,8 @@ TensorEngine::TensorEngine(std::string &exec_type)
 {
     Ops = NULL;
     SetExecutorType(exec_type);
-    TheCudaStream = NULL;  
+    TheCudaStream = NULL;
+    IsMultiKernelLaunch = false;
 }
 
 

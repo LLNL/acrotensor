@@ -212,6 +212,24 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
       }
    }
 
+   SECTION("MultiKernel Launch")
+   {
+      Tensor A(3);
+      Tensor B1(3), B2(3);
+      Tensor C(3,3);
+
+      B1(0) = 1.0; B1(1) = 2.0; B1(2) = 3.0;
+      B2.Set(1.0);
+      C.Set(1.0);
+      TE.BeginMultiKernelLaunch();
+      TE("A_i=B_i", A, B1);
+      TE("A_i = C_i_j B_j", A, C, B2);
+      TE.EndMultiKernelLaunch();
+      CHECK(A(0) == Approx(3.0));
+      CHECK(A(1) == Approx(3.0));
+      CHECK(A(2) == Approx(3.0));
+   }   
+
    SECTION("Tensor Engine Clear")
    {
       REQUIRE_NOTHROW(TE.Clear());
@@ -278,38 +296,6 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             REQUIRE(A(i) == B(i));
          }
          acroCudaErrorCheck(cudaFree(a_device_data));
-      }
-
-      SECTION("Two Step Computation")
-      {
-         Tensor A(3);
-         Tensor B(3);
-         Tensor C(3,3);
-
-         A.MapToGPU();
-         B.MapToGPU();
-         C.MapToGPU();
-
-         B(0) = 1.0; B(1) = 2.0; B(2) = 3.0;
-         A.SwitchToGPU();
-         B.MoveToGPU();
-         TE("A_i=B_i", A, B);
-         A.MoveFromGPU();
-         CHECK(A(0) == Approx(B(0)));
-         CHECK(A(1) == Approx(B(1)));
-         CHECK(A(2) == Approx(B(2)));
-
-         A.SwitchToGPU();
-         B.Set(1.0);    //B is still on the GPU
-         C.Set(1.0);
-         C.MoveToGPU();
-         TE("A_i = C_i_j B_j", A, C, B);
-         A.MoveFromGPU();
-         if (A(0) != Approx(3.0))
-            std::cout << TE.GetImplementation("A_i = C_i_j B_j",A, C, B) << std::endl;
-         CHECK(A(0) == Approx(3.0));
-         CHECK(A(1) == Approx(3.0));
-         CHECK(A(2) == Approx(3.0));
       }
 
       SECTION("Transpose")
@@ -629,6 +615,30 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             }              
          }
       }
+
+      SECTION("MultiKernel Launch")
+      {
+         Tensor A(3);
+         Tensor B1(3), B2(3);
+         Tensor C(3,3);
+
+         A.MapToGPU();
+         B1.MapToGPU();
+         B2.MapToGPU();
+         C.MapToGPU();
+
+         B1(0) = 1.0; B1(1) = 2.0; B1(2) = 3.0;
+         B2.Set(1.0);
+         C.Set(1.0);
+         TE.BeginMultiKernelLaunch();
+         TE("A_i=B_i", A, B1);
+         TE("A_i = C_i_j B_j", A, C, B2);
+         TE.EndMultiKernelLaunch();
+         A.MoveFromGPU();
+         CHECK(A(0) == Approx(3.0));
+         CHECK(A(1) == Approx(3.0));
+         CHECK(A(2) == Approx(3.0));
+      }      
    }
 
    SECTION("Batched Inverses/Determinents")
