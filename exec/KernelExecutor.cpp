@@ -83,7 +83,7 @@ void KernelExecutor::MoveTensorsToOutputLocation(Tensor *output, std::vector<Ten
 }
 
 
-void KernelExecutor::ExecuteMulti(std::vector<Tensor*> output, std::vector<std::vector<Tensor*> > &inputs)
+void KernelExecutor::ExecuteMulti(std::vector<Tensor*> &output, std::vector<std::vector<Tensor*> > &inputs)
 {
     if (SubExecutors.size() != MultiKernel->Kernels.size())
     {

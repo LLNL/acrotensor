@@ -33,6 +33,8 @@ class CudaKernel
    ~CudaKernel();
    void GenerateFunction();
    void SetGlobalArray(std::string &ame, std::vector<int> &arr);
+   void WriteCodeToFile(const char *fname);
+   void WriteCodeToFile(std::string &fname);
    template<typename T>
    inline void AddTextureData(int id, std::vector<T> &data);
    cudaTextureObject_t GetTextureObject(int id);

@@ -49,7 +49,8 @@ class TensorKernel
     int GetVarRank(int vari);
 
     //Change the order of the loops which will affect the following loop_num functions and the values of Var->LoopNums
-    void SetLoopOrder(std::vector<std::string> &idx_list);
+    std::string GetLoopIndex(int loopi) {return LoopIndices[loopi];}
+    virtual void SetLoopIndices(std::vector<std::string> &idx_list);
 
     //The loop number for the given variable/dimension (vari = -1 for output)
     int GetVarDimLoopNum(int vari, int dim);
@@ -61,16 +62,32 @@ class TensorKernel
     //Does the input var have an index matching this loop num (vari = -1 for output)
     bool IsVarDependentOnLoop(int vari, int loop_num);
 
-    //Is this loop a contraction loop
-    bool IsContractionLoop(int loop_num);
+    //Does the Kernel have dependence on this index
+    bool IsDependentOnIndex(std::string &idx);
 
-    //The highes loop number that the var varies by (vari=-1 for output)
-    int GetVarLoopDepth(int vari);    
+    //Does the Kernel have dependence on this index
+    bool IsDependentOnLoop(int loop_num);    
+
+    //Does this a contraction index
+    bool IsContractionIndex(std::string &idx);
+
+    //Is this loop a contraction loop
+    bool IsContractionLoop(int loop_num);    
+
+    //Get the highest loop number that the entire kernel depends on
+    int GetLoopDepth();
+
+    //The highest loop number that the var varies by (vari=-1 for output)
+    int GetVarLoopDepth(int vari);
+
+    //The the name of the variable (vari=-1 for output)
+    std::string &GetVarName(int vari);
 
     //This returns the post parsed name string
     std::string GetNameString();
 
-    //This returns a modified kernel string with the dimensions compatible with the tensors 
+    //This returns a modified kernel string with the dimensions compatible with the tensors
+    virtual std::string GetDimensionedNameString() {ACROBATIC_ASSERT(false); return "";}
     virtual std::string GetDimensionedNameString(Tensor *output, std::vector<Tensor*> &inputs);
 
     std::vector<int> GetLoopIdxSizes(Tensor *output, std::vector<Tensor*> &inputs);
@@ -81,7 +98,7 @@ class TensorKernel
     std::vector<KernelVar*> InputVars;              //The input vars extracted from the kernel string
     std::vector<std::string> AllIndexNames;         //The names of all the indices extracted from the kernel string
     std::vector<std::string> ContractionIndexNames; //The names of the contraction indices extracted from the kernel string
-    std::vector<std::string> LoopOrder;
+    std::vector<std::string> LoopIndices;
 
     private:
     void ParseKernel();

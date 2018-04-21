@@ -20,13 +20,16 @@ class DimensionedKernel : public TensorKernel
     DimensionedKernel(TensorKernel *kernel, Tensor *output, std::vector<Tensor*> &inputs);
 
     //The dimensions of all the loops now that we have attached tensors
-    const std::vector<int> &GetLoopDims();
+    const std::vector<int> &GetLoopDims() {return LoopDims;}
+    const std::vector<int> &GetLoopStrides() {return LoopStrides;}
     int GetLoopDim(int i) {return LoopDims[i];}
     int GetLoopStride(int i) {return LoopStrides[i];}
+    virtual void SetLoopIndices(std::vector<std::string> &idx_list);
 
     //Get a string with all of the loop dimensions
     std::string GetLoopDimsString();
     std::string GetDimensionedNameString() {return GetNameString() + GetLoopDimsString();}
+    std::string GetDimensionedNameString(Tensor *output, std::vector<Tensor*> &inputs) {return GetDimensionedNameString();}
 
     //The the number of index combinations for all the loops (the product of the loop dims)
     int GetFlatIdxSize();

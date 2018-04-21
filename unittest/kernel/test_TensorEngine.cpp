@@ -631,8 +631,8 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          B2.Set(1.0);
          C.Set(1.0);
          TE.BeginMultiKernelLaunch();
-         TE("A_i=B_i", A, B1);
-         TE("A_i = C_i_j B_j", A, C, B2);
+         TE("A_i = B1_i", A, B1);
+         TE("A_i = C_i_j B2_j", A, C, B2);
          TE.EndMultiKernelLaunch();
          A.MoveFromGPU();
          CHECK(A(0) == Approx(3.0));

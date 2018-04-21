@@ -18,21 +18,46 @@ DimensionedKernel::DimensionedKernel(TensorKernel *kernel, Tensor *output, std::
     InputVars = kernel->InputVars;
     AllIndexNames = kernel->AllIndexNames;
     ContractionIndexNames = kernel->ContractionIndexNames;
-    LoopOrder = kernel->LoopOrder;
+    LoopIndices = kernel->LoopIndices;
 
     LoopDims = kernel->GetLoopIdxSizes(output, inputs);
-    LoopStrides.resize(GetNumIndices());
-    LoopStrides[GetNumIndices() - 1] = 1;
-    for (int loopd = GetNumIndices() - 2; loopd >= 0; --loopd)
+    LoopStrides.resize(LoopDims.size());
+    LoopStrides[LoopDims.size() - 1] = 1;
+    for (int loopd = LoopDims.size() - 2; loopd >= 0; --loopd)
     {
         LoopStrides[loopd] = LoopStrides[loopd+1]*LoopDims[loopd+1];
     }
 }
 
 
-const std::vector<int> &DimensionedKernel::GetLoopDims()
+void DimensionedKernel::SetLoopIndices(std::vector<std::string> &idx_list)
 {
-    return LoopDims;
+    //Update the loop dims before we change all the LoopIndex info
+    std::vector<int> NewLoopDims(idx_list.size(), 1);
+    for (int idxi = 0; idxi < NewLoopDims.size(); ++idxi)
+    {
+        auto it = std::find(LoopIndices.begin(), LoopIndices.end(), idx_list[idxi]);
+        if (it != LoopIndices.end())
+        {
+            NewLoopDims[idxi] = LoopDims[std::distance(LoopIndices.begin(), it)];
+        }
+        else
+        {
+            NewLoopDims[idxi] = 1;
+        }
+    }
+    LoopDims = NewLoopDims;
+
+    //Update the loop strides
+    LoopStrides.resize(LoopDims.size());
+    LoopStrides[LoopDims.size() - 1] = 1;
+    for (int loopd = LoopDims.size() - 2; loopd >= 0; --loopd)
+    {
+        LoopStrides[loopd] = LoopStrides[loopd+1]*LoopDims[loopd+1];
+    }
+
+    //update all the indices and underlying variable objects
+    TensorKernel::SetLoopIndices(idx_list);
 }
 
 

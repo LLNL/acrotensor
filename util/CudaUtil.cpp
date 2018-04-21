@@ -5,6 +5,7 @@
 
 #include "CudaUtil.hpp"
 #include <iostream>
+#include <fstream>
 
 #ifdef ACRO_HAVE_CUDA
 namespace acro
@@ -71,7 +72,7 @@ void CudaKernel::GenerateFunction()
     acroCudaErrorCheck(nvrtcGetPTXSize(prog, &ptxSize));
     char *ptx = new char[ptxSize];
     acroCudaErrorCheck(nvrtcGetPTX(prog, ptx));
-    // Load the generated PTX and get a handle to the SAXPY kernel.
+    // Load the generated PTX and get a handle to the kernel.
     acroCudaErrorCheck(cuModuleLoadDataEx(&Module, ptx, 0, 0, 0));
     acroCudaErrorCheck(cuModuleGetFunction(&Function, Module, FunctionName.c_str()));
     acroCudaErrorCheck(nvrtcDestroyProgram(&prog));
@@ -97,6 +98,23 @@ void CudaKernel::Launch(std::vector<void*> &kernel_params, cudaStream_t cuda_str
                                       0, cuda_stream,             // shared mem and stream
                                       &kernel_params[0], 0));     // arguments
 }
+
+
+void CudaKernel::WriteCodeToFile(const char *fname)
+{
+    std::string fname_str(fname);
+    WriteCodeToFile(fname_str);
+}
+
+
+void CudaKernel::WriteCodeToFile(std::string &fname)
+{
+    std::ofstream file;
+    file.open(fname);
+    file << Code;
+    file.close();
+}
+
 
 
 __global__ void CudaSet(double *d, double val, int N)

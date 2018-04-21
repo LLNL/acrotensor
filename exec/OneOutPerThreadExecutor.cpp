@@ -6,8 +6,7 @@
 #ifdef ACRO_HAVE_CUDA
 
 #include "OneOutPerThreadExecutor.hpp"
-#include <iostream>
-#include <math.h>
+#include <algorithm>
 
 namespace acro
 {
@@ -30,29 +29,76 @@ void OneOutPerThreadExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*>
 {
     MoveTensorsToGPU(output, inputs);
 
-    int numinvars = FirstKernel->GetNumInputVars();
-    int outidx_size = FirstKernel->GetOutIdxSize();
-    const std::vector<int> N = FirstKernel->GetLoopDims();
-
-    double *dout = output->GetDeviceData();
-    double **din = new double*[numinvars];
-    double **device_din;
-    for (int ivari = 0; ivari < numinvars; ++ivari)
-    {
-        din[ivari] = inputs[ivari]->GetDeviceData();
-    }
-    acroCudaErrorCheck(cudaMalloc(&device_din, numinvars*sizeof(double*)));
-    acroCudaErrorCheck(cudaMemcpy(device_din, din, numinvars*sizeof(double*), cudaMemcpyHostToDevice));
-
+    int numuvars = MultiKernel->GetNumUVars();
+    double **tptrs = new double*[numuvars];
     std::vector<void*> kernelParams;
-    kernelParams.push_back(&dout);
-    kernelParams.push_back(&device_din);
+    for (int uvari = 0; uvari < numuvars; ++uvari)
+    {
+        auto ki_vari = MultiKernel->GetFirstKiVariForUVari(uvari);
+        int vari = ki_vari.second;
+        if (vari == -1)
+        {
+            tptrs[uvari] = output->GetDeviceData();
+        }
+        else
+        {
+            tptrs[uvari] = inputs[vari]->GetDeviceData();
+        }
+        kernelParams.push_back(&(tptrs[uvari]));
+    }
 
+    // double **device_tptrs;
+    // acroCudaErrorCheck(cudaMalloc(&device_tptrs, numuvars*sizeof(double*)));
+    // acroCudaErrorCheck(cudaMemcpy(device_tptrs, tptrs, numuvars*sizeof(double*), cudaMemcpyHostToDevice));
+
+    // std::vector<void*> kernelParams;
+    // kernelParams.push_back(&tptrs);
+    TheCudaKernel->Launch(kernelParams);
+    // cudaDeviceSynchronize();
+
+    // acroCudaErrorCheck(cudaFree(device_tptrs));
+    delete [] tptrs;
+}
+
+
+void OneOutPerThreadExecutor::ExecuteMulti(std::vector<Tensor*> &outputs, std::vector<std::vector<Tensor*> > &inputs)
+{
+    for (int ki = 0; ki < MultiKernel->GetNumKernels(); ++ki)
+    {
+        MoveTensorsToGPU(outputs[ki], inputs[ki]);
+    }
+
+    int numuvars = MultiKernel->GetNumUVars();
+    double **tptrs = new double*[numuvars];
+    std::vector<void*> kernelParams;
+    for (int uvari = 0; uvari < numuvars; ++uvari)
+    {
+        auto ki_vari = MultiKernel->GetFirstKiVariForUVari(uvari);
+        int ki = ki_vari.first;
+        int vari = ki_vari.second;
+        if (vari == -1)
+        {
+            tptrs[uvari] = outputs[ki]->GetDeviceData();
+        }
+        else
+        {
+            tptrs[uvari] = inputs[ki][vari]->GetDeviceData();
+        }
+        kernelParams.push_back(&(tptrs[uvari]));
+    }
+
+    // double **device_tptrs;
+    // acroCudaErrorCheck(cudaMalloc(&device_tptrs, numuvars*sizeof(double*)));
+    // acroCudaErrorCheck(cudaMemcpy(device_tptrs, tptrs, numuvars*sizeof(double*), cudaMemcpyHostToDevice));
+
+    
+    //kernelParams.push_back(&tptrs);
     TheCudaKernel->Launch(kernelParams, TheCudaStream);
 
-    acroCudaErrorCheck(cudaFree(device_din));
-    delete [] din;
+    // acroCudaErrorCheck(cudaFree(device_tptrs));
+    delete [] tptrs;
 }
+
 
 std::string OneOutPerThreadExecutor::GetImplementation()
 {
@@ -63,12 +109,122 @@ std::string OneOutPerThreadExecutor::GetImplementation()
 void OneOutPerThreadExecutor::GenerateCudaKernel()
 {
     TheCudaKernel = new CudaKernel;
-    int numloops = FirstKernel->GetNumIndices();
-    int numoutloops = FirstKernel->GetNumOuterIndices();
-    int numcontloops = FirstKernel->GetNumContractionIndices();
-    int numinvars = FirstKernel->GetNumInputVars();
-    const std::vector<int> N = FirstKernel->GetLoopDims();
+    TheCudaKernel->Code = 
+    "extern \"C\"  \n"
+    "__global__ void <KERNEL_NAME>(<PARAMS>)\n"
+    "{\n"
+    "    double sum;\n"
+    "    int outidx = (blockIdx.x*blockDim.x + threadIdx.x);\n"
+    "\n"
+        "<PRELOAD_SMVARS>"
+    "\n"
+    "    __syncthreads();\n"
+    "    if (outidx < <OUTIDX_SIZE>) {\n"
+            "<COMPUTE_IOUT>"
+    "\n"
+            "<SUBKERNEL_LOOPS>"
+    "    }\n"
+    "}\n";
 
+    //Generate the kernel name
+    TheCudaKernel->FunctionName = "Kernel";
+
+    //Generate the params list
+    std::string params_str;
+    for (int uvari = 0; uvari < MultiKernel->GetNumUVars(); ++uvari)
+    {
+        params_str += "double *T" + std::to_string(uvari);
+        if (uvari < MultiKernel->GetNumUVars()-1)
+        {
+            params_str += ", ";
+        }
+    }
+
+    int numouterloops = MultiKernel->GetNumOuterIndices();
+    ACROBATIC_ASSERT(numouterloops > 0, "OneOutPerThreadExecutor needs at least 1 non-contraction index.");
+
+    int outidx_size = MultiKernel->GetSharedOuterIdxSize();
+    TheCudaKernel->ThreadsPerBlock = 256;
+    TheCudaKernel->NumBlocks = outidx_size / TheCudaKernel->ThreadsPerBlock + 1;
+
+    std::vector<bool> sharedmem_uvars;
+    GetSharedMemUvars(sharedmem_uvars);
+    std::string preload_sm_str = GenSharedMemPreload(sharedmem_uvars);
+
+    //Generate the indices outside the contraction loop
+    std::string iout_str = GenIOutVars();
+
+    //Generate the subkernel loops
+    std::string subkernel_loops_str = GenSubKernelLoops(sharedmem_uvars);
+
+    str_replace_all(TheCudaKernel->Code, "<KERNEL_NAME>", TheCudaKernel->FunctionName);
+    str_replace_all(TheCudaKernel->Code, "<PARAMS>", params_str);
+    str_replace_all(TheCudaKernel->Code, "<OUTIDX_SIZE>", outidx_size);
+    str_replace_all(TheCudaKernel->Code, "<PRELOAD_SMVARS>", preload_sm_str);
+    str_replace_all(TheCudaKernel->Code, "<COMPUTE_IOUT>", iout_str);
+    str_replace_all(TheCudaKernel->Code, "<SUBKERNEL_LOOPS>", subkernel_loops_str);
+
+    std::cout << TheCudaKernel->Code << std::endl;
+    TheCudaKernel->GenerateFunction();
+}
+
+
+void OneOutPerThreadExecutor::GetSharedMemUvars(std::vector<bool> &sharedmem_uvars)
+{
+    int numuvars = MultiKernel->GetNumUVars();
+    sharedmem_uvars.resize(numuvars);
+    int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / 256;
+    int shared_dbls_remaining = (CudaDeviceProp.sharedMemPerMultiprocessor / num_blocks_per_full_sm) / 8;
+    for (int uvari = 0; uvari < numuvars; ++uvari)
+    {
+        sharedmem_uvars[uvari] = false;
+        if (!MultiKernel->IsOutputUVar(uvari))
+        {
+            int ivar_size = MultiKernel->GetVarSize(uvari);
+            if (ivar_size < shared_dbls_remaining)
+            {
+                sharedmem_uvars[uvari] = true;
+                shared_dbls_remaining -= ivar_size;
+            }
+        }
+    }
+}
+
+
+std::string OneOutPerThreadExecutor::GenSharedMemPreload(std::vector<bool> &sharedmem_uvars)
+{
+    //If applicable Generate the SM preload code for small tensors
+    std::string preload_sm_str;
+    for (int uvari = 0; uvari < MultiKernel->GetNumUVars(); ++uvari)
+    {
+        if (sharedmem_uvars[uvari])
+        {
+            preload_sm_str += "    __shared__ double sT" + std::to_string(uvari);
+            preload_sm_str += "[" + std::to_string(MultiKernel->GetVarSize(uvari)) + "];\n";
+        }
+    }
+    for (int uvari = 0; uvari < MultiKernel->GetNumUVars(); ++uvari)
+    {
+        if (sharedmem_uvars[uvari])
+        {
+            std::string temp = 
+                "    for (int idx = threadIdx.x; idx < <SMVAR_SIZE>; idx += blockDim.x)\n"
+                "    {\n"
+                "        sT<VARNUM>[idx] = T<VARNUM>[idx];\n"
+                "    }\n\n";
+            str_replace_all(temp, "<SMVAR_SIZE>", MultiKernel->GetVarSize(uvari));
+            str_replace_all(temp, "<VARNUM>", uvari);
+            preload_sm_str += temp;
+        }
+    }
+    return preload_sm_str;
+}
+
+
+std::string OneOutPerThreadExecutor::GenIOutVars()
+{
+    const std::vector<int> N = MultiKernel->GetLoopDims();
+    int numoutloops = MultiKernel->GetNumOuterIndices();
     std::vector<int> Wout(numoutloops); //Outer loop strides
     if (numoutloops > 0) 
     {
@@ -79,194 +235,168 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
         Wout[d] = Wout[d+1]*N[d+1];
     }
 
-    std::vector<int> Wcont(numcontloops); //Contraction loop strides
-    if (numcontloops > 0)
-    { 
-        Wcont[numcontloops-1] = 1;
-    }
-    for (int d = numcontloops - 2; d >= 0; --d)
-    {
-        Wcont[d] = Wcont[d+1]*N[d+1+numoutloops];
-    }
-
-    int flatidx_size = FirstKernel->GetFlatIdxSize();
-    int outidx_size = FirstKernel->GetOutIdxSize();
-    int contidx_size = FirstKernel->GetContIdxSize();
-    int unroll_size = contidx_size <= 8 ? contidx_size : 8;
-    TheCudaKernel->ThreadsPerBlock = 256;
-    TheCudaKernel->NumBlocks = outidx_size / TheCudaKernel->ThreadsPerBlock + 1;
-
-    TheCudaKernel->Code = 
-    "extern \"C\"  \n"
-    "__global__ void <KERNEL_NAME>(double *dout, double **din)\n"
-    "{\n"
-    "    double sum;\n"
-    "    int outidx = (blockIdx.x*blockDim.x + threadIdx.x);\n"
-    "\n"
-        "<PRELOAD_SMVARS>"
-    "\n"
-    "    __syncthreads();\n"
-    "    if (outidx < <OUTIDX_SIZE>) {\n"
-    "        sum = 0.0;\n"
-            "<COMPUTE_IOUT>"
-    "\n"
-            "<CONTLOOPS>"
-    "            sum += <COMPUTE_RHS>;\n"
-            "<ENDCONTLOOPS>"
-    "        dout[outidx] <OUT_EQ_OP> sum;\n"
-    "    }\n"
-    "}\n";
-
-    //Generate the kernel name
-    TheCudaKernel->FunctionName = FirstKernel->GetDimensionedNameString();
-
-    //If applicable Generate the SM preload code for small tensors
-    std::vector<bool> sharedmem_invars;
-    GetSharedMemInvars(sharedmem_invars);
-    std::string computePreloadSMVarsStr;
-    for (int ivari = 0; ivari < numinvars; ++ivari)
-    {
-        if (sharedmem_invars[ivari])
-        {
-            computePreloadSMVarsStr += "    __shared__ double sdin" + std::to_string(ivari);
-            computePreloadSMVarsStr += "[" + std::to_string(FirstKernel->GetVarSize(ivari)) + "];\n";
-        }
-    }
-    for (int ivari = 0; ivari < numinvars; ++ivari)
-    {
-        if (sharedmem_invars[ivari])
-        {
-            std::string temp = 
-                "    for (int idx = threadIdx.x; idx < <SMVAR_SIZE>; idx += blockDim.x)\n"
-                "    {\n"
-                "        sdin<VARNUM>[idx] = din[<VARNUM>][idx];\n"
-                "    }\n"
-                "    __syncwarp();\n\n";
-            str_replace_all(temp, "<SMVAR_SIZE>", FirstKernel->GetVarSize(ivari));
-            str_replace_all(temp, "<VARNUM>", ivari);
-            computePreloadSMVarsStr += temp;
-        }
-    }
-
-
-    //Generate the indices outside the contraction loop
-    std::string computeIOutStr;
+    std::string iout_str;
     for (int loopd = 0; loopd < numoutloops; ++loopd)
     {
         //I[loopd] = (outidx / (Wout[loopd]) % N[loopd];
-        computeIOutStr += "        ";
-        computeIOutStr += "int I" + std::to_string(loopd) + " = ";
+        iout_str += "        ";
+        iout_str += "int I" + std::to_string(loopd) + " = ";
         if (Wout[loopd] == 1)
         {
-            computeIOutStr += "outidx";
+            iout_str += "outidx";
         }
         else
         {
-            computeIOutStr += "(outidx / " + std::to_string(Wout[loopd]) + ")";
+            iout_str += "(outidx / " + std::to_string(Wout[loopd]) + ")";
             TheCudaKernel->IntOpsPerIndex += 1;
         }
         if (loopd > 0)
         {
-            computeIOutStr += " % " + std::to_string(N[loopd]);
+            iout_str += " % " + std::to_string(N[loopd]);
         }
-        computeIOutStr += ";\n";
-    }
+        iout_str += ";    // " + MultiKernel->GetLoopIndex(loopd) + "\n";
 
-    //Generate the contraction loops
-    std::string contLoops;
-    std::vector<bool> hoisted(FirstKernel->GetNumInputVars(), false);
-    for (int loopd = numoutloops; loopd < numloops; ++loopd)
+    }
+    return iout_str;
+}
+
+
+
+std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &sharedmem_uvars)
+{
+    std::string kernel_loops_str;
+
+    for (int ki = 0; ki < MultiKernel->GetNumKernels(); ++ki)
     {
-        std::string temp;
-        for (int ivari = 0; ivari < FirstKernel->GetNumInputVars(); ++ ivari)
+        std::string loop_str = 
+        "        //<KERNELSTR>\n"
+                "<MIDLOOPS>"
+        "            sum = 0.0;\n"
+                    "<CONTLOOPS>"
+        "                sum += <COMPUTE_RHS>;\n"
+                    "<ENDCONTLOOPS>"
+        "            T<OUTUVARI>[<OUTIDX>] <OUT_EQ_OP> sum;\n"
+                "<ENDMIDLOOPS>"
+        "\n";
+
+
+        DimensionedKernel *kernel = MultiKernel->Kernels[ki];
+        int numloops = MultiKernel->GetNumIndices();
+        int numoutloops = MultiKernel->GetNumOuterIndices();
+        int numcontloops = kernel->GetNumContractionIndices();
+        int numinvars = kernel->GetNumInputVars();
+        
+        //Generate the mid loops
+        int nummidloops = 0;
+        std::string mid_loops_str;
+        std::vector<bool> hoisted(numinvars, false);
+        for (int loopi = numoutloops; loopi < numloops; ++loopi)
         {
-            if (FirstKernel->GetVarLoopDepth(ivari) < loopd && !sharedmem_invars[ivari] && !hoisted[ivari])
+            std::cout << ki << ", " << loopi << kernel->IsDependentOnLoop(loopi) << kernel->IsContractionLoop(loopi) << std::endl;
+            if (kernel->IsDependentOnLoop(loopi) && !kernel->IsContractionLoop(loopi))
             {
-                std::string ivaristr = std::to_string(ivari);
-                std::string varidxstr = GetVarIndexString(ivari);             
-                temp += "        double din" + ivaristr + " = __ldg(&din[" + ivaristr + "][" + varidxstr + "]);\n";
-                hoisted[ivari] = true;
+                std::string temp;
+                for (int ivari = 0; ivari < numinvars; ++ ivari)
+                {
+                    int uvari = MultiKernel->GetUVari(ki, ivari);
+                    if (kernel->GetVarLoopDepth(ivari) < loopi && !sharedmem_uvars[uvari] && !hoisted[ivari])
+                    {
+                        std::string uvaristr = std::to_string(uvari);
+                        std::string varidxstr = GenVarIndex(ki, ivari);             
+                        temp += "        double hT" + uvaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
+                        hoisted[ivari] = true;
+                    }
+                }
+
+                temp += "        #pragma unroll\n";
+                temp += "        for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {";
+                temp += "    // " + MultiKernel->GetLoopIndex(loopi) + "\n";
+                str_replace_all(temp, "<LOOPD>", loopi);
+                str_replace_all(temp, "<LOOP_SIZE>", kernel->GetLoopDim(loopi));
+                mid_loops_str += temp;
+                nummidloops += 1;
+            }
+        }
+        std::string end_mid_loops_str = "        " + std::string(nummidloops, '}') + "\n";
+
+
+        //Generate the contraction loops
+        std::string cont_loops_str;
+        for (int loopi = numoutloops; loopi < numloops; ++loopi)
+        {
+            if (kernel->IsContractionLoop(loopi))
+            {
+                std::string temp;
+                for (int ivari = 0; ivari < numinvars; ++ ivari)
+                {
+                    int uvari = MultiKernel->GetUVari(ki, ivari);
+                    if (kernel->GetVarLoopDepth(ivari) < loopi && !sharedmem_uvars[uvari] && !hoisted[ivari])
+                    {
+                        std::string uvaristr = std::to_string(uvari);
+                        std::string varidxstr = GenVarIndex(ki, ivari);     
+                        temp += "            double hT" + uvaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
+                        hoisted[ivari] = true;
+                    }
+                }
+
+                temp += "            #pragma unroll\n";
+                temp += "            for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {";
+                temp += "    // " + MultiKernel->GetLoopIndex(loopi) + "\n";
+                str_replace_all(temp, "<LOOPD>", loopi);
+                str_replace_all(temp, "<LOOP_SIZE>", kernel->GetLoopDim(loopi));
+                cont_loops_str += temp;
+            }
+        }
+        std::string end_cont_loops_str = "            " + std::string(numcontloops, '}') + "\n";
+
+        //Generate the RHS computation inside the contraction loops
+        std::string rhs_str;
+        for (int ivari = 0; ivari < numinvars; ++ ivari)
+        {
+            int uvari = MultiKernel->GetUVari(ki, ivari);
+            if (sharedmem_uvars[uvari])
+            {
+                rhs_str += "sT" + std::to_string(uvari) + "[" + GenVarIndex(ki, ivari) + "]";
+            }
+            else if (hoisted[ivari])
+            {
+                rhs_str += "hT" + std::to_string(uvari);
+            }
+            else
+            {
+                rhs_str += "__ldg(&T" + std::to_string(uvari) + "[" + GenVarIndex(ki, ivari) + "])";
+            }
+
+            if (ivari < numinvars-1)
+            {
+                rhs_str += "*";
             }
         }
 
-        temp += "        #pragma unroll\n";
-        temp += "        for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {\n";
-        str_replace_all(temp, "<LOOPD>", loopd);
-        str_replace_all(temp, "<LOOP_SIZE>", FirstKernel->GetLoopDim(loopd));
-        contLoops += temp;
+        str_replace_all(loop_str, "<KERNELSTR>", kernel->KernelStr);
+        str_replace_all(loop_str, "<MIDLOOPS>", mid_loops_str);
+        str_replace_all(loop_str, "<CONTLOOPS>", cont_loops_str);
+        str_replace_all(loop_str, "<COMPUTE_RHS>", rhs_str);
+        str_replace_all(loop_str, "<ENDCONTLOOPS>", end_cont_loops_str);
+        str_replace_all(loop_str, "<OUTUVARI>", MultiKernel->GetUVari(ki, -1));
+        str_replace_all(loop_str, "<OUT_EQ_OP>", kernel->EqOperator);
+        str_replace_all(loop_str, "<OUTIDX>", GenVarIndex(ki, -1));
+        str_replace_all(loop_str, "<ENDMIDLOOPS>", end_mid_loops_str);
+        kernel_loops_str += loop_str + '\n';
     }
-    std::string endContLoops = "        " + std::string(numcontloops, '}') + "\n";
-
-    //Generate the RHS computation inside the contraction loops
-    std::string computeRHSStr;
-    for (int ivari = 0; ivari < numinvars; ++ ivari)
-    {
-        if (sharedmem_invars[ivari])
-        {
-            computeRHSStr += "sdin" + std::to_string(ivari) = "[" + GetVarIndexString(ivari) + "]";
-        }
-        else if (hoisted[ivari])
-        {
-            computeRHSStr += "din" + std::to_string(ivari);
-        }
-        else
-        {
-            computeRHSStr += "__ldg(&din[" + std::to_string(ivari) + "][" + GetVarIndexString(ivari) + "])";
-        }
-        if (ivari < numinvars-1)
-        {
-            computeRHSStr += "*";
-        }
-    }
-
-    str_replace_all(TheCudaKernel->Code, "<KERNEL_NAME>", TheCudaKernel->FunctionName);
-    str_replace_all(TheCudaKernel->Code, "<NUMINVARS>", FirstKernel->GetNumInputVars());
-    str_replace_all(TheCudaKernel->Code, "<NUMLOOPS>", FirstKernel->GetNumIndices());
-    str_replace_all(TheCudaKernel->Code, "<OUTIDX_SIZE>", outidx_size);
-    str_replace_all(TheCudaKernel->Code, "<CONTIDX_SIZE>", contidx_size);
-    str_replace_all(TheCudaKernel->Code, "<UNROLL_SIZE>", unroll_size);
-    str_replace_all(TheCudaKernel->Code, "<PRELOAD_SMVARS>", computePreloadSMVarsStr);
-    str_replace_all(TheCudaKernel->Code, "<COMPUTE_IOUT>", computeIOutStr);
-    str_replace_all(TheCudaKernel->Code, "<CONTLOOPS>", contLoops);
-    str_replace_all(TheCudaKernel->Code, "<ENDCONTLOOPS>", endContLoops);
-    str_replace_all(TheCudaKernel->Code, "<COMPUTE_RHS>", computeRHSStr);
-    str_replace_all(TheCudaKernel->Code, "<OUT_EQ_OP>", FirstKernel->EqOperator);
-
-    //std::cout << FirstKernel->KernelStr << std::endl;
-    //std::cout << TheCudaKernel->Code << std::endl;
-    TheCudaKernel->GenerateFunction();
+    return kernel_loops_str;
 }
 
-
-void OneOutPerThreadExecutor::GetSharedMemInvars(std::vector<bool> &sharedmem_invars)
+std::string OneOutPerThreadExecutor::GenVarIndex(int ki, int vari)
 {
-    int numinvars = FirstKernel->GetNumInputVars();
-    int numoutloops = FirstKernel->GetNumOuterIndices();
-    sharedmem_invars.resize(numinvars);
-    int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / 256;
-    int shared_dbls_remaining = (CudaDeviceProp.sharedMemPerMultiprocessor / num_blocks_per_full_sm) / 8;
-    for (int ivari = 0; ivari < numinvars; ++ivari)
-    {
-        sharedmem_invars[ivari] = false;
-        int ivar_size = FirstKernel->GetVarSize(ivari);
-        if (false && ivar_size < shared_dbls_remaining)
-        {
-            sharedmem_invars[ivari] = true;
-            shared_dbls_remaining -= ivar_size;
-        }
-    }
-}
-
-
-std::string OneOutPerThreadExecutor::GetVarIndexString(int vari)
-{
-    std::string indexStr = "I" + std::to_string(FirstKernel->GetVarDimLoopNum(vari, 0)) + "*" +
-                            std::to_string(FirstKernel->GetVarDimStride(vari, 0));                         
-    for (int d = 1; d < FirstKernel->GetVarRank(vari); ++d)
+    DimensionedKernel *kernel = MultiKernel->Kernels[ki];
+    std::string indexStr = "I" + std::to_string(kernel->GetVarDimLoopNum(vari, 0)) + "*" +
+                            std::to_string(kernel->GetVarDimStride(vari, 0));                         
+    for (int d = 1; d < kernel->GetVarRank(vari); ++d)
     {
         indexStr += " + ";
-        indexStr += "I" + std::to_string(FirstKernel->GetVarDimLoopNum(vari, d)) + "*" +
-                          std::to_string(FirstKernel->GetVarDimStride(vari, d));                                   
+        indexStr += "I" + std::to_string(kernel->GetVarDimLoopNum(vari, d)) + "*" +
+                          std::to_string(kernel->GetVarDimStride(vari, d));                                   
     }
     return indexStr;
 }

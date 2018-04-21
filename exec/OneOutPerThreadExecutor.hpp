@@ -8,7 +8,8 @@
 
 #ifdef ACRO_HAVE_CUDA
 #include "KernelExecutor.hpp"
-#include <map>
+#include <string>
+#include <vector>
 #include <nvrtc.h>
 
 namespace acro
@@ -20,13 +21,20 @@ class OneOutPerThreadExecutor : public KernelExecutor
     OneOutPerThreadExecutor(DimensionedMultiKernel *multi_kernel);
     ~OneOutPerThreadExecutor();
     virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs);
+    virtual void ExecuteMulti(std::vector<Tensor*> &output, std::vector<std::vector<Tensor*> > &inputs);
     virtual std::string GetImplementation();
     virtual std::string GetExecType() {return "OneOutPerThread";}
 
     private:
     void GenerateCudaKernel();
-    void GetSharedMemInvars(std::vector<bool> &sharedmem_invars);
-    std::string GetVarIndexString(int vari);
+    void GetMKOuterIndices(std::vector<std::string> &mk_outer_indices);
+    void ReorderIndices(std::vector<std::string> &mk_outer_indices);
+    void GetSharedMemUvars(std::vector<bool> &sharedmem_uvars);
+
+    std::string GenSharedMemPreload(std::vector<bool> &sharedmem_uvars);
+    std::string GenIOutVars();
+    std::string GenSubKernelLoops(std::vector<bool> &sharedmem_uvars);
+    std::string GenVarIndex(int ki, int vari);
     cudaDeviceProp CudaDeviceProp;
     CudaKernel *TheCudaKernel;
 };

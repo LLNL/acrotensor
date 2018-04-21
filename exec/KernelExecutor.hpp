@@ -23,7 +23,7 @@ class KernelExecutor
     virtual std::string GetImplementation() = 0;
     virtual std::string GetExecType() = 0;
     virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs) = 0;
-    virtual void ExecuteMulti(std::vector<Tensor*> output, std::vector<std::vector<Tensor*> > &inputs);
+    virtual void ExecuteMulti(std::vector<Tensor*> &output, std::vector<std::vector<Tensor*> > &inputs);
 
     inline int ComputeRawIdx(const Tensor &T, const int *RESTRICT I, const std::vector<int> &loop_nums);
 

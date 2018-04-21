@@ -64,7 +64,7 @@ void TensorKernel::ParseKernel()
         }
     }
 
-    LoopOrder = AllIndexNames;
+    LoopIndices = AllIndexNames;
     SetVarLoopNums();
 }
 
@@ -146,8 +146,8 @@ void TensorKernel::SetVarLoopNums()
     OutputVar.LoopNums.resize(OutputVar.IndexNames.size());
     for (int idxi = 0; idxi < OutputVar.IndexNames.size(); ++idxi)
     {
-        auto loopit = std::find(LoopOrder.begin(), LoopOrder.end(), OutputVar.IndexNames[idxi]);
-        OutputVar.LoopNums[idxi] = std::distance(LoopOrder.begin(), loopit);
+        auto loopit = std::find(LoopIndices.begin(), LoopIndices.end(), OutputVar.IndexNames[idxi]);
+        OutputVar.LoopNums[idxi] = std::distance(LoopIndices.begin(), loopit);
     }
 
     for (int ivari = 0; ivari < InputVars.size(); ++ivari)
@@ -155,8 +155,8 @@ void TensorKernel::SetVarLoopNums()
         InputVars[ivari]->LoopNums.resize(InputVars[ivari]->IndexNames.size());
         for (int idxi = 0; idxi < InputVars[ivari]->IndexNames.size(); ++idxi)
         {
-            auto loopit = std::find(LoopOrder.begin(), LoopOrder.end(), InputVars[ivari]->IndexNames[idxi]);
-            InputVars[ivari]->LoopNums[idxi] = std::distance(LoopOrder.begin(), loopit);
+            auto loopit = std::find(LoopIndices.begin(), LoopIndices.end(), InputVars[ivari]->IndexNames[idxi]);
+            InputVars[ivari]->LoopNums[idxi] = std::distance(LoopIndices.begin(), loopit);
         }
     }
 }
@@ -175,12 +175,23 @@ int TensorKernel::GetVarRank(int vari)
 }
 
 
+int TensorKernel::GetLoopDepth()
+{
+    int depth = -1; //Invariant to all loops
+    for (int vari = -1; vari < GetNumInputVars(); ++vari)
+    {
+        depth = std::max(depth, GetVarLoopDepth(vari));
+    }
+    return depth;
+}
+
+
 int TensorKernel::GetVarLoopDepth(int vari)
 {
     ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
 
     int depth = -1; //Invariant to all loops
-    for (int loopd = 0; loopd < GetNumIndices(); ++ loopd)
+    for (int loopd = 0; loopd < LoopIndices.size(); ++ loopd)
     {
         if (IsVarDependentOnLoop(vari, loopd))
         {
@@ -191,9 +202,9 @@ int TensorKernel::GetVarLoopDepth(int vari)
 }
 
 
-void TensorKernel::SetLoopOrder(std::vector<std::string> &idx_list)
+void TensorKernel::SetLoopIndices(std::vector<std::string> &idx_list)
 {
-    LoopOrder = idx_list;
+    LoopIndices = idx_list;
 
     //Update the LoopNums with the new permuted order
     SetVarLoopNums();
@@ -219,7 +230,7 @@ int TensorKernel::GetLoopNumVarDim(int loop_num, int vari)
     ACROBATIC_ASSERT(loop_num >= 0 && loop_num < AllIndexNames.size());
     ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
 
-    std::string loop_index_name = AllIndexNames[loop_num];
+    std::string loop_index_name = GetLoopIndex(loop_num);
 
     for (int d = 0; d < GetVarRank(vari); ++d)
     {
@@ -248,11 +259,41 @@ bool TensorKernel::IsVarDependentOnLoop(int vari, int loop_num)
 }
 
 
-bool TensorKernel::IsContractionLoop(int loop_num)
+bool TensorKernel::IsDependentOnIndex(std::string &idx) 
 {
-    std::string idxstr = LoopOrder[loop_num];
-    return std::find(ContractionIndexNames.begin(),ContractionIndexNames.end(), idxstr)
-                     != ContractionIndexNames.end();
+    return std::find(AllIndexNames.begin(), AllIndexNames.end(), idx) != AllIndexNames.end();
+}
+
+
+bool TensorKernel::IsDependentOnLoop(int loop_num) 
+{
+    std::string idxstr = LoopIndices[loop_num];
+    return IsDependentOnIndex(LoopIndices[loop_num]);
+}
+
+
+bool TensorKernel::IsContractionIndex(std::string &idx) 
+{
+    return std::find(ContractionIndexNames.begin(), ContractionIndexNames.end(), idx) != ContractionIndexNames.end();
+}
+
+
+bool TensorKernel::IsContractionLoop(int loop_num) 
+{
+    return IsContractionIndex(LoopIndices[loop_num]);
+}
+
+
+std::string &TensorKernel::GetVarName(int vari)
+{
+    if (vari == -1)
+    {
+        return OutputVar.Name;
+    }
+    else
+    {
+        return InputVars[vari]->Name;
+    }
 }
 
 
@@ -307,7 +348,7 @@ std::string TensorKernel::GetDimensionedNameString(Tensor *output, std::vector<T
 std::vector<int> TensorKernel::GetLoopIdxSizes(Tensor *output, std::vector<Tensor*> &inputs)
 {
     std::vector<int> idx_sizes;
-    idx_sizes.resize(GetNumIndices());
+    idx_sizes.resize(LoopIndices.size(), 1);        //Set loop indices not in this kernel to dim=1
     for (int idxi = 0; idxi < output->GetRank(); ++idxi)
     {
         idx_sizes[GetVarDimLoopNum(-1, idxi)] = output->GetDim(idxi);
