@@ -174,11 +174,11 @@ std::string reconstruct_kernel_str(TensorKernel &Kernel)
 
    for (int vari = 0; vari < Kernel.InputVars.size(); ++vari)
    {
-      str += Kernel.InputVars[vari]->Name;
-      for (int d = 0; d < Kernel.InputVars[vari]->IndexNames.size(); ++d)
+      str += Kernel.InputVars[vari].Name;
+      for (int d = 0; d < Kernel.InputVars[vari].IndexNames.size(); ++d)
       {
          str += "_";
-         str += Kernel.InputVars[vari]->IndexNames[d];
+         str += Kernel.InputVars[vari].IndexNames[d];
       }
    }
    return str;

@@ -72,7 +72,9 @@ class TensorKernel
     bool IsContractionIndex(std::string &idx);
 
     //Is this loop a contraction loop
-    bool IsContractionLoop(int loop_num);    
+    bool IsContractionLoop(int loop_num);
+
+    bool IsContractionVar(int vari);
 
     //Get the highest loop number that the entire kernel depends on
     int GetLoopDepth();
@@ -95,7 +97,7 @@ class TensorKernel
     std::string KernelStr;                          //The user provided kernel string
     KernelVar OutputVar;                            //The output var extracted from the kernel string
     std::string EqOperator;                         //The assignement operator extracted from the kernel string (=, +=)
-    std::vector<KernelVar*> InputVars;              //The input vars extracted from the kernel string
+    std::vector<KernelVar> InputVars;              //The input vars extracted from the kernel string
     std::vector<std::string> AllIndexNames;         //The names of all the indices extracted from the kernel string
     std::vector<std::string> ContractionIndexNames; //The names of the contraction indices extracted from the kernel string
     std::vector<std::string> LoopIndices;
@@ -107,8 +109,6 @@ class TensorKernel
     void ParseIndexVar(std::string::iterator &it, KernelVar &var);
     void ParseEqOperator(std::string::iterator &it, std::string &op);
     void SetVarLoopNums();
-
-
 };
 
 }

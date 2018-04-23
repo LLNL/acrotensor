@@ -28,6 +28,15 @@ void CPUInterpretedExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*> 
 
     int num_loops = FirstKernel->GetNumIndices();
     std::vector<int> N = FirstKernel->GetLoopDims();
+    int *OutputLoopNums = &(FirstKernel->OutputVar.LoopNums[0]);
+    int NumInVars = inputs.size();
+    std::vector<int*> input_loop_nums;
+    for (int vari = 0; vari < NumInVars; ++vari)
+    {
+        input_loop_nums[vari] = &(FirstKernel->InputVars[vari].LoopNums[0]);
+    }
+
+    int **InputLoopNums = &input_loop_nums[0];
 
     //Since we are using += or -= into the output 
     if (FirstKernel->EqOperator == "=")
@@ -65,10 +74,9 @@ void CPUInterpretedExecutor::Execute1Loops(Tensor *output, std::vector<Tensor*> 
     const std::vector<int> N = FirstKernel->GetLoopDims();
     int &i0 = I[0];
 
-
     for (i0 = 0; i0 < N[0]; ++i0)
     {
-        (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+        (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
     }
 }
 
@@ -81,7 +89,7 @@ void CPUInterpretedExecutor::Execute2Loops(Tensor *output, std::vector<Tensor*> 
     {
         for (I[1] = 0; I[1] < N[1]; ++I[1]) 
         {
-            (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+            (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
         }
     }
 }
@@ -97,7 +105,7 @@ void CPUInterpretedExecutor::Execute3Loops(Tensor *output, std::vector<Tensor*> 
         {
             for (I[2] = 0; I[2] < N[2]; ++I[2])
             {
-                (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
             }
         }
     }    
@@ -116,7 +124,7 @@ void CPUInterpretedExecutor::Execute4Loops(Tensor *output, std::vector<Tensor*> 
             {
                 for (I[3] = 0; I[3] < N[3]; ++I[3])
                 {
-                    (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                    (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                 }
             }
         }
@@ -138,7 +146,7 @@ void CPUInterpretedExecutor::Execute5Loops(Tensor *output, std::vector<Tensor*> 
                 {
                     for (I[4] = 0; I[4] < N[4]; ++I[4])
                     {
-                        (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                        (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                     }
                 }
             }
@@ -163,7 +171,7 @@ void CPUInterpretedExecutor::Execute6Loops(Tensor *output, std::vector<Tensor*> 
                     {
                         for (I[5] = 0; I[5] < N[5]; ++I[5])
                         {
-                            (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                            (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                         }
                     }
                 }
@@ -191,7 +199,7 @@ void CPUInterpretedExecutor::Execute7Loops(Tensor *output, std::vector<Tensor*> 
                         {
                             for (I[6] = 0; I[6] < N[6]; ++I[6])
                             {
-                                (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                                (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                             }
                         }
                     }
@@ -222,7 +230,7 @@ void CPUInterpretedExecutor::Execute8Loops(Tensor *output, std::vector<Tensor*> 
                             {
                                 for (I[7] = 0; I[7] < N[7]; ++I[7])
                                 {
-                                    (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                                    (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                                 }
                             }
                         }
@@ -256,7 +264,7 @@ void CPUInterpretedExecutor::Execute9Loops(Tensor *output, std::vector<Tensor*> 
                                 {
                                     for (I[8] = 0; I[8] < N[8]; ++I[8])
                                     {                                    
-                                        (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                                        (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                                     }
                                 }
                             }
@@ -293,7 +301,7 @@ void CPUInterpretedExecutor::Execute10Loops(Tensor *output, std::vector<Tensor*>
                                     {                                    
                                         for (I[9] = 0; I[9] < N[9]; ++I[9])
                                         {                                    
-                                            (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                                            (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                                         }
                                     }
                                 }
@@ -333,7 +341,7 @@ void CPUInterpretedExecutor::Execute11Loops(Tensor *output, std::vector<Tensor*>
                                         {
                                             for (I[10] = 0; I[10] < N[10]; ++I[10])
                                             {
-                                                (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                                                (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                                             }
                                         }
                                     }
@@ -376,7 +384,7 @@ void CPUInterpretedExecutor::Execute12Loops(Tensor *output, std::vector<Tensor*>
                                             {
                                                 for (I[11] = 0; I[11] < N[11]; ++I[11])
                                                 {
-                                                    (*output)[ComputeRawIdx(*output, I, FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I);
+                                                    (*output)[ComputeRawIdx(*output, I, OutputLoopNums)] += ComputeRHS(inputs, I);
                                                 }
                                             }
                                         }
@@ -416,7 +424,7 @@ void CPUInterpretedExecutor::ExecuteArbitraryLoops(Tensor *output, std::vector<T
         {
             I[loopd] = (flatidx / W[loopd]) % N[loopd];
         }
-        (*output)[ComputeRawIdx(*output, I.data(), FirstKernel->OutputVar.LoopNums)] += ComputeRHS(inputs, I.data());
+        (*output)[ComputeRawIdx(*output, I.data(), OutputLoopNums)] += ComputeRHS(inputs, I.data());
     }
 }
 

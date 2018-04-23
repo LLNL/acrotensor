@@ -37,15 +37,19 @@ class CPUInterpretedExecutor : public KernelExecutor
     void ExecuteArbitraryLoops(Tensor *output, std::vector<Tensor*> &inputs);
 
     inline double ComputeRHS(const std::vector<Tensor*> &inputs, const int *RESTRICT I);
+
+    int *OutputLoopNums;
+    int NumInVars;
+    int **InputLoopNums;
 };
 
 
 inline double CPUInterpretedExecutor::ComputeRHS(const std::vector<Tensor*> &inputs, const int *RESTRICT I)
 {
-    double rhs_val = (*inputs[0])[ComputeRawIdx(*inputs[0], I, FirstKernel->InputVars[0]->LoopNums)];
-    for  (unsigned int vari = 1; vari < inputs.size(); ++vari)
+    double rhs_val = (*inputs[0])[ComputeRawIdx(*inputs[0], I, InputLoopNums[0])];
+    for (unsigned int vari = 1; vari < NumInVars; ++vari)
     {
-        rhs_val *= (*inputs[vari])[ComputeRawIdx(*inputs[vari], I, FirstKernel->InputVars[vari]->LoopNums)];
+        rhs_val *= (*inputs[vari])[ComputeRawIdx(*inputs[vari], I, InputLoopNums[vari])];
     }
     return rhs_val;
 }

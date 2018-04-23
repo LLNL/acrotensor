@@ -562,6 +562,7 @@ DimensionedKernel *TensorEngine::GetAddDimensionedKernel(TensorKernel *kernel, T
 {
     DimensionedKernel *new_kernel;
     std::string dimensioned_kernel_str = kernel->GetDimensionedNameString(output, inputs);
+    std::cout << dimensioned_kernel_str << std::endl;
     auto it = DimensionedKernelMap.find(dimensioned_kernel_str);
     if (it != DimensionedKernelMap.end())
     {
@@ -578,7 +579,7 @@ DimensionedKernel *TensorEngine::GetAddDimensionedKernel(TensorKernel *kernel, T
         ACROBATIC_ASSERT(inputs.size() == kernel->InputVars.size());
         for (int i = 0; i < inputs.size(); ++i)
         {
-            ACROBATIC_ASSERT(inputs[i]->GetRank() == kernel->InputVars[i]->IndexNames.size(),
+            ACROBATIC_ASSERT(inputs[i]->GetRank() == kernel->InputVars[i].IndexNames.size(),
                              "Tensor rank of input var " + std::to_string(i) +
                              " does not match the rank of the actual tensor.\n" +
                             +"Kernel:  " + kernel->KernelStr);

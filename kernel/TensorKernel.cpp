@@ -34,14 +34,12 @@ void TensorKernel::ParseKernel()
  
     ParseEqOperator(it, EqOperator);
 
-    KernelVar *input_var = new KernelVar();
-    ParseKernelVar(it, *input_var);
-    InputVars.push_back(input_var);
+    InputVars.push_back(KernelVar());
+    ParseKernelVar(it, InputVars.back());
 
     while(it != ParseStr.end()) {
-        input_var = new KernelVar();
-        ParseKernelVar(it, *input_var);
-        InputVars.push_back(input_var);
+        InputVars.push_back(KernelVar());
+        ParseKernelVar(it, InputVars.back());
     }
 
     //Gather up the IndexNames and LoopNums associated with the OutputTensor
@@ -52,14 +50,14 @@ void TensorKernel::ParseKernel()
 
     //Now gather up the IndexNames and LoopNums associated with the contraction indices
     for (int vari = 0; vari < InputVars.size(); ++vari) {
-        for (int indi = 0; indi < InputVars[vari]->IndexNames.size(); ++indi) {
+        for (int indi = 0; indi < InputVars[vari].IndexNames.size(); ++indi) {
             auto acit = std::find(AllIndexNames.begin(), 
                                 AllIndexNames.end(),
-                                InputVars[vari]->IndexNames[indi]);
+                                InputVars[vari].IndexNames[indi]);
             if (acit == AllIndexNames.end()) {
                 //The IndexName is not on the list yet so add it to everything
-                ContractionIndexNames.push_back(InputVars[vari]->IndexNames[indi]);
-                AllIndexNames.push_back(InputVars[vari]->IndexNames[indi]);
+                ContractionIndexNames.push_back(InputVars[vari].IndexNames[indi]);
+                AllIndexNames.push_back(InputVars[vari].IndexNames[indi]);
             }
         }
     }
@@ -152,11 +150,11 @@ void TensorKernel::SetVarLoopNums()
 
     for (int ivari = 0; ivari < InputVars.size(); ++ivari)
     {
-        InputVars[ivari]->LoopNums.resize(InputVars[ivari]->IndexNames.size());
-        for (int idxi = 0; idxi < InputVars[ivari]->IndexNames.size(); ++idxi)
+        InputVars[ivari].LoopNums.resize(InputVars[ivari].IndexNames.size());
+        for (int idxi = 0; idxi < InputVars[ivari].IndexNames.size(); ++idxi)
         {
-            auto loopit = std::find(LoopIndices.begin(), LoopIndices.end(), InputVars[ivari]->IndexNames[idxi]);
-            InputVars[ivari]->LoopNums[idxi] = std::distance(LoopIndices.begin(), loopit);
+            auto loopit = std::find(LoopIndices.begin(), LoopIndices.end(), InputVars[ivari].IndexNames[idxi]);
+            InputVars[ivari].LoopNums[idxi] = std::distance(LoopIndices.begin(), loopit);
         }
     }
 }
@@ -171,7 +169,7 @@ int TensorKernel::GetVarRank(int vari)
         return OutputVar.IndexNames.size();
     }
 
-    return InputVars[vari]->IndexNames.size();
+    return InputVars[vari].IndexNames.size();
 }
 
 
@@ -221,13 +219,13 @@ int TensorKernel::GetVarDimLoopNum(int vari, int dim)
         return OutputVar.LoopNums[dim];
     }
 
-    return InputVars[vari]->LoopNums[dim];
+    return InputVars[vari].LoopNums[dim];
 }
 
 
 int TensorKernel::GetLoopNumVarDim(int loop_num, int vari)
 {
-    ACROBATIC_ASSERT(loop_num >= 0 && loop_num < AllIndexNames.size());
+    ACROBATIC_ASSERT(loop_num >= 0 && loop_num < LoopIndices.size());
     ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
 
     std::string loop_index_name = GetLoopIndex(loop_num);
@@ -243,7 +241,7 @@ int TensorKernel::GetLoopNumVarDim(int loop_num, int vari)
         }
         else
         {
-            if (InputVars[vari]->IndexNames[d] == loop_index_name)
+            if (InputVars[vari].IndexNames[d] == loop_index_name)
             {
                 return d;
             }
@@ -284,6 +282,27 @@ bool TensorKernel::IsContractionLoop(int loop_num)
 }
 
 
+bool TensorKernel::IsContractionVar(int vari)
+{
+    ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
+
+    if (vari == -1)
+    {
+        return false;
+    }
+
+    for (auto idx : InputVars[vari].IndexNames)
+    {
+        if (IsContractionIndex(idx))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 std::string &TensorKernel::GetVarName(int vari)
 {
     if (vari == -1)
@@ -292,7 +311,7 @@ std::string &TensorKernel::GetVarName(int vari)
     }
     else
     {
-        return InputVars[vari]->Name;
+        return InputVars[vari].Name;
     }
 }
 
@@ -320,10 +339,10 @@ std::string TensorKernel::GetNameString()
 
     for (int ivari = 0; ivari < InputVars.size(); ++ivari)
     {
-        name += InputVars[ivari]->Name;
-        for (int d = 0; d < InputVars[ivari]->LoopNums.size(); ++d)
+        name += InputVars[ivari].Name;
+        for (int d = 0; d < InputVars[ivari].IndexNames.size(); ++d)
         {
-            name += "_" + std::to_string(InputVars[ivari]->LoopNums[d]);
+            name += "_" + InputVars[ivari].IndexNames[d];
         }
     }
     return name;
@@ -347,27 +366,28 @@ std::string TensorKernel::GetDimensionedNameString(Tensor *output, std::vector<T
 
 std::vector<int> TensorKernel::GetLoopIdxSizes(Tensor *output, std::vector<Tensor*> &inputs)
 {
-    std::vector<int> idx_sizes;
-    idx_sizes.resize(LoopIndices.size(), 1);        //Set loop indices not in this kernel to dim=1
+    std::vector<int> idx_sizes(LoopIndices.size(), 1);  //Set loop indices not in this kernel to dim=1
     for (int idxi = 0; idxi < output->GetRank(); ++idxi)
     {
+        ACROBATIC_ASSERT(GetVarDimLoopNum(-1, idxi) >= 0 && GetVarDimLoopNum(-1, idxi) < idx_sizes.size());
         idx_sizes[GetVarDimLoopNum(-1, idxi)] = output->GetDim(idxi);
     }
 
     for (int vari = 0; vari < InputVars.size(); ++vari)
     {
-        for (int indi = 0; indi < InputVars[vari]->LoopNums.size(); ++indi)
+        for (int idxi = 0; idxi < inputs[vari]->GetRank(); ++idxi)
         {
-            idx_sizes[GetVarDimLoopNum(vari, indi)] = inputs[vari]->GetDim(indi);
+            ACROBATIC_ASSERT(GetVarDimLoopNum(vari, idxi) >= 0 && GetVarDimLoopNum(vari, idxi) < idx_sizes.size());
+            idx_sizes[GetVarDimLoopNum(vari, idxi)] = inputs[vari]->GetDim(idxi);
         }
     }
 
     //Check to make sure that the dimensions of the tensors are compatible with the kernel
     for (int vari = 0; vari < InputVars.size(); ++vari)
     {
-        for (int indi = 0; indi < InputVars[vari]->LoopNums.size(); ++indi)
+        for (int idxi = 0; idxi < InputVars[vari].LoopNums.size(); ++idxi)
         {
-            ACROBATIC_ASSERT(idx_sizes[InputVars[vari]->LoopNums[indi]] == inputs[vari]->GetDim(indi),
+            ACROBATIC_ASSERT(idx_sizes[InputVars[vari].LoopNums[idxi]] == inputs[vari]->GetDim(idxi),
                              "Incompatible tensor dimensions for kernel:  " + KernelStr);
         }
     }

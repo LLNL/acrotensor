@@ -147,8 +147,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     TheCudaKernel->ThreadsPerBlock = 256;
     TheCudaKernel->NumBlocks = outidx_size / TheCudaKernel->ThreadsPerBlock + 1;
 
-    std::vector<bool> sharedmem_uvars;
-    GetSharedMemUvars(sharedmem_uvars);
+    std::vector<bool> sharedmem_uvars = GetSharedMemUvars();
     std::string preload_sm_str = GenSharedMemPreload(sharedmem_uvars);
 
     //Generate the indices outside the contraction loop
@@ -169,8 +168,9 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
 }
 
 
-void OneOutPerThreadExecutor::GetSharedMemUvars(std::vector<bool> &sharedmem_uvars)
+std::vector<bool> OneOutPerThreadExecutor::GetSharedMemUvars()
 {
+    std::vector<bool> sharedmem_uvars;
     int numuvars = MultiKernel->GetNumUVars();
     sharedmem_uvars.resize(numuvars);
     int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / 256;
@@ -188,6 +188,7 @@ void OneOutPerThreadExecutor::GetSharedMemUvars(std::vector<bool> &sharedmem_uva
             }
         }
     }
+    return sharedmem_uvars;
 }
 
 
@@ -292,14 +293,16 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
         std::vector<bool> hoisted(numinvars, false);
         for (int loopi = numoutloops; loopi < numloops; ++loopi)
         {
-            std::cout << ki << ", " << loopi << kernel->IsDependentOnLoop(loopi) << kernel->IsContractionLoop(loopi) << std::endl;
             if (kernel->IsDependentOnLoop(loopi) && !kernel->IsContractionLoop(loopi))
             {
                 std::string temp;
                 for (int ivari = 0; ivari < numinvars; ++ ivari)
                 {
                     int uvari = MultiKernel->GetUVari(ki, ivari);
-                    if (kernel->GetVarLoopDepth(ivari) < loopi && !sharedmem_uvars[uvari] && !hoisted[ivari])
+                    if (!kernel->IsContractionVar(ivari) &&
+                        kernel->GetVarLoopDepth(ivari) < loopi &&
+                        !sharedmem_uvars[uvari] &&
+                        !hoisted[ivari])
                     {
                         std::string uvaristr = std::to_string(uvari);
                         std::string varidxstr = GenVarIndex(ki, ivari);             
