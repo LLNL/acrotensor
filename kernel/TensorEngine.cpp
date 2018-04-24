@@ -17,7 +17,9 @@ TensorEngine::TensorEngine()
     std::string exec_type("CPUInterpreted");
     Ops = NULL;
     SetExecutorType(exec_type);
+#ifdef ACRO_HAVE_CUDA
     TheCudaStream = NULL;
+#endif
     IsMultiKernelLaunch = false;
 }
 
@@ -27,7 +29,9 @@ TensorEngine::TensorEngine(const char *bare_exec_type)
     std::string exec_type(bare_exec_type);
     Ops = NULL;
     SetExecutorType(exec_type);
+#ifdef ACRO_HAVE_CUDA    
     TheCudaStream = NULL;
+#endif
     IsMultiKernelLaunch = false;
 }
 
@@ -36,7 +40,9 @@ TensorEngine::TensorEngine(std::string &exec_type)
 {
     Ops = NULL;
     SetExecutorType(exec_type);
+#ifdef ACRO_HAVE_CUDA    
     TheCudaStream = NULL;
+#endif
     IsMultiKernelLaunch = false;
 }
 
@@ -67,7 +73,7 @@ void TensorEngine::SetExecutorType(std::string &exec_type)
                      exec_type == "CPUInterpreted",
                      "Unknown Executor type:  " + exec_type);
 #ifndef ACRO_HAVE_CUDA
-    ACROBATIC_ASSERT(exec_type != "OneOutPerThread" &&
+    ACROBATIC_ASSERT(exec_type != "OneOutPerThread", 
                      "CUDA required for executor:  " + exec_type);
 #endif
 

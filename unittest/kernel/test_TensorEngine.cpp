@@ -239,6 +239,7 @@ void test_suite_on_cpu_engine(TensorEngine &TE)
 
 void test_suite_on_gpu_engine(TensorEngine &TE)
 {
+#ifdef ACRO_HAVE_CUDA
    std::random_device rd;
    std::mt19937 twister(rd());
    std::uniform_real_distribution<double> random(0.0, 1.0);  
@@ -275,7 +276,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
          CHECK(A(0) == Approx(B(0)));
          CHECK(A(1) == Approx(B(1)));
          CHECK(A(2) == Approx(B(2)));
-      }      
+      }  
 
       SECTION("Computation with externally defined Data")
       {
@@ -734,5 +735,6 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
             }
          }         
       }
-   }   
+   }
+#endif
 }

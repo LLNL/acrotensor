@@ -28,15 +28,15 @@ void CPUInterpretedExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*> 
 
     int num_loops = FirstKernel->GetNumIndices();
     std::vector<int> N = FirstKernel->GetLoopDims();
-    int *OutputLoopNums = &(FirstKernel->OutputVar.LoopNums[0]);
-    int NumInVars = inputs.size();
-    std::vector<int*> input_loop_nums;
+    OutputLoopNums = &(FirstKernel->OutputVar.LoopNums[0]);
+    NumInVars = inputs.size();
+    std::vector<int*> input_loop_nums(NumInVars);
     for (int vari = 0; vari < NumInVars; ++vari)
     {
         input_loop_nums[vari] = &(FirstKernel->InputVars[vari].LoopNums[0]);
     }
 
-    int **InputLoopNums = &input_loop_nums[0];
+    InputLoopNums = &input_loop_nums[0];
 
     //Since we are using += or -= into the output 
     if (FirstKernel->EqOperator == "=")
