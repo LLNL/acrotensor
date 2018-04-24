@@ -22,6 +22,8 @@ class DimensionedKernel : public TensorKernel
     //The dimensions of all the loops now that we have attached tensors
     const std::vector<int> &GetLoopDims() {return LoopDims;}
     const std::vector<int> &GetLoopStrides() {return LoopStrides;}
+    int GetLoopDim(std::string &idx) {return LoopDims[GetLoopNum(idx)];}
+    int GetLoopStride(std::string &idx) {return LoopStrides[GetLoopNum(idx)];}
     int GetLoopDim(int i) {return LoopDims[i];}
     int GetLoopStride(int i) {return LoopStrides[i];}
     virtual void SetLoopIndices(std::vector<std::string> &idx_list);

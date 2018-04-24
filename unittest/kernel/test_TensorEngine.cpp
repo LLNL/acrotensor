@@ -545,7 +545,7 @@ void test_suite_on_gpu_engine(TensorEngine &TE)
 
          SECTION("3D Stiffness")
          {
-            std::string kernel_str = "S_e_i1_i2_i3_j1_j2_j3 = B_i1_j1_k1_m_n B_i2_j2_k2_m_n B_i3_j3_k3_m_n D_e_k1_k2_k3_m_n";
+            std::string kernel_str = "S_e_i1_i2_i3_j1_j2_j3 = B1_i1_j1_k1_m_n B2_i2_j2_k2_m_n B3_i3_j3_k3_m_n D_e_k1_k2_k3_m_n";
             Tensor S(10, 5, 5, 5, 5, 5, 5);
             Tensor Btilde1(5, 5, 5, 3, 3);
             Tensor Btilde2(5, 5, 5, 3, 3);

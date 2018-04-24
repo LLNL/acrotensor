@@ -568,7 +568,6 @@ DimensionedKernel *TensorEngine::GetAddDimensionedKernel(TensorKernel *kernel, T
 {
     DimensionedKernel *new_kernel;
     std::string dimensioned_kernel_str = kernel->GetDimensionedNameString(output, inputs);
-    std::cout << dimensioned_kernel_str << std::endl;
     auto it = DimensionedKernelMap.find(dimensioned_kernel_str);
     if (it != DimensionedKernelMap.end())
     {

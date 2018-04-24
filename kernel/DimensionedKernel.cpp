@@ -64,9 +64,9 @@ void DimensionedKernel::SetLoopIndices(std::vector<std::string> &idx_list)
 std::string DimensionedKernel::GetLoopDimsString()
 {
     std::string name = "__dim";
-    for (int idxi = 0; idxi < LoopDims.size(); ++idxi)
+    for (auto idx : AllIndexNames)
     {
-        name += "_" + std::to_string(LoopDims[idxi]);
+        name += "_" + std::to_string(GetLoopDim(idx));
     }
     
     return name;

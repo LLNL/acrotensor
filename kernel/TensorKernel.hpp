@@ -50,6 +50,7 @@ class TensorKernel
 
     //Change the order of the loops which will affect the following loop_num functions and the values of Var->LoopNums
     std::string GetLoopIndex(int loopi) {return LoopIndices[loopi];}
+    int GetLoopNum(std::string &idx);
     virtual void SetLoopIndices(std::vector<std::string> &idx_list);
 
     //The loop number for the given variable/dimension (vari = -1 for output)

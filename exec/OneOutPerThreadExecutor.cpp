@@ -163,7 +163,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     str_replace_all(TheCudaKernel->Code, "<COMPUTE_IOUT>", iout_str);
     str_replace_all(TheCudaKernel->Code, "<SUBKERNEL_LOOPS>", subkernel_loops_str);
 
-    std::cout << TheCudaKernel->Code << std::endl;
+    //std::cout << TheCudaKernel->Code << std::endl;
     TheCudaKernel->GenerateFunction();
 }
 
@@ -304,9 +304,10 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
                         !sharedmem_uvars[uvari] &&
                         !hoisted[ivari])
                     {
+                        std::string ivaristr = std::to_string(ivari);
                         std::string uvaristr = std::to_string(uvari);
                         std::string varidxstr = GenVarIndex(ki, ivari);             
-                        temp += "        double hT" + uvaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
+                        temp += "        double hIN" + ivaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
                         hoisted[ivari] = true;
                     }
                 }
@@ -335,9 +336,10 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
                     int uvari = MultiKernel->GetUVari(ki, ivari);
                     if (kernel->GetVarLoopDepth(ivari) < loopi && !sharedmem_uvars[uvari] && !hoisted[ivari])
                     {
+                        std::string ivaristr = std::to_string(ivari);
                         std::string uvaristr = std::to_string(uvari);
                         std::string varidxstr = GenVarIndex(ki, ivari);     
-                        temp += "            double hT" + uvaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
+                        temp += "            double hIN" + ivaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
                         hoisted[ivari] = true;
                     }
                 }
@@ -363,7 +365,7 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
             }
             else if (hoisted[ivari])
             {
-                rhs_str += "hT" + std::to_string(uvari);
+                rhs_str += "hIN" + std::to_string(ivari);
             }
             else
             {

@@ -209,6 +209,14 @@ void TensorKernel::SetLoopIndices(std::vector<std::string> &idx_list)
 }
 
 
+int TensorKernel::GetLoopNum(std::string &idx)
+{
+    auto it = std::find(LoopIndices.begin(), LoopIndices.end(), idx);
+    ACROBATIC_ASSERT(it != LoopIndices.end(), "Loop index (" + idx + ") not found in kernel:\n"
+                     + KernelStr + "\n");
+    return std::distance(LoopIndices.begin(), it);
+}
+
 int TensorKernel::GetVarDimLoopNum(int vari, int dim)
 {
     ACROBATIC_ASSERT(vari >= -1 && vari < GetNumInputVars());
@@ -319,9 +327,9 @@ std::string &TensorKernel::GetVarName(int vari)
 std::string TensorKernel::GetNameString()
 {
     std::string name = OutputVar.Name;
-    for (int d = 0; d < OutputVar.LoopNums.size(); ++d)
+    for (int d = 0; d < OutputVar.IndexNames.size(); ++d)
     {
-        name += "_" + std::to_string(OutputVar.LoopNums[d]);
+        name += "_" + OutputVar.IndexNames[d];
     }
 
     if (EqOperator == "=")
