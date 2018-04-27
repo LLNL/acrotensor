@@ -7,6 +7,7 @@
 
 #include "OneOutPerThreadExecutor.hpp"
 #include <algorithm>
+#include <set>
 
 namespace acro
 {
@@ -47,16 +48,8 @@ void OneOutPerThreadExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*>
         kernelParams.push_back(&(tptrs[uvari]));
     }
 
-    // double **device_tptrs;
-    // acroCudaErrorCheck(cudaMalloc(&device_tptrs, numuvars*sizeof(double*)));
-    // acroCudaErrorCheck(cudaMemcpy(device_tptrs, tptrs, numuvars*sizeof(double*), cudaMemcpyHostToDevice));
-
-    // std::vector<void*> kernelParams;
-    // kernelParams.push_back(&tptrs);
     TheCudaKernel->Launch(kernelParams);
-    // cudaDeviceSynchronize();
-
-    // acroCudaErrorCheck(cudaFree(device_tptrs));
+    cudaDeviceSynchronize();
     delete [] tptrs;
 }
 
@@ -87,15 +80,8 @@ void OneOutPerThreadExecutor::ExecuteMulti(std::vector<Tensor*> &outputs, std::v
         kernelParams.push_back(&(tptrs[uvari]));
     }
 
-    // double **device_tptrs;
-    // acroCudaErrorCheck(cudaMalloc(&device_tptrs, numuvars*sizeof(double*)));
-    // acroCudaErrorCheck(cudaMemcpy(device_tptrs, tptrs, numuvars*sizeof(double*), cudaMemcpyHostToDevice));
-
-    
-    //kernelParams.push_back(&tptrs);
-    TheCudaKernel->Launch(kernelParams, TheCudaStream);
-
-    // acroCudaErrorCheck(cudaFree(device_tptrs));
+    TheCudaKernel->Launch(kernelParams);
+    cudaDeviceSynchronize();
     delete [] tptrs;
 }
 
@@ -114,16 +100,16 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     "__global__ void <KERNEL_NAME>(<PARAMS>)\n"
     "{\n"
     "    double sum;\n"
-    "    int outidx = (blockIdx.x*blockDim.x + threadIdx.x);\n"
+    "    const int outidx = blockIdx.x;//*blockDim.x+threadIdx.x;\n"
+    "    if (outidx > <OUTIDX_SIZE>) return;\n"
     "\n"
         "<PRELOAD_SMVARS>"
     "\n"
     "    __syncthreads();\n"
-    "    if (outidx < <OUTIDX_SIZE>) {\n"
-            "<COMPUTE_IOUT>"
+        "<COMPUTE_IOUT>"
     "\n"
-            "<SUBKERNEL_LOOPS>"
-    "    }\n"
+        "<SUBKERNEL_LOOPS>"
+
     "}\n";
 
     //Generate the kernel name
@@ -145,7 +131,8 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
 
     int outidx_size = MultiKernel->GetSharedOuterIdxSize();
     TheCudaKernel->ThreadsPerBlock = 256;
-    TheCudaKernel->NumBlocks = outidx_size / TheCudaKernel->ThreadsPerBlock + 1;
+    //TheCudaKernel->NumBlocks = (outidx_size / TheCudaKernel->ThreadsPerBlock) + 1;
+    TheCudaKernel->NumBlocks = outidx_size;
 
     std::vector<bool> sharedmem_uvars = GetSharedMemUvars();
     std::string preload_sm_str = GenSharedMemPreload(sharedmem_uvars);
@@ -164,6 +151,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     str_replace_all(TheCudaKernel->Code, "<SUBKERNEL_LOOPS>", subkernel_loops_str);
 
     //std::cout << TheCudaKernel->Code << std::endl;
+    TheCudaKernel->WriteCodeToFile("kernel.cu");
     TheCudaKernel->GenerateFunction();
 }
 
@@ -173,7 +161,7 @@ std::vector<bool> OneOutPerThreadExecutor::GetSharedMemUvars()
     std::vector<bool> sharedmem_uvars;
     int numuvars = MultiKernel->GetNumUVars();
     sharedmem_uvars.resize(numuvars);
-    int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / 256;
+    int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / TheCudaKernel->ThreadsPerBlock;
     int shared_dbls_remaining = (CudaDeviceProp.sharedMemPerMultiprocessor / num_blocks_per_full_sm) / 8;
     for (int uvari = 0; uvari < numuvars; ++uvari)
     {
@@ -189,6 +177,76 @@ std::vector<bool> OneOutPerThreadExecutor::GetSharedMemUvars()
         }
     }
     return sharedmem_uvars;
+}
+
+
+std::vector<int> OneOutPerThreadExecutor::GetMidloopsOrder(int ki, std::vector<bool> &sharedmem_uvars)
+{
+    DimensionedKernel* kernel = MultiKernel->Kernels[ki];
+    int numoutloops = MultiKernel->GetNumOuterIndices();
+    int numloops = MultiKernel->GetNumIndices();
+    int numinvars = kernel->GetNumInputVars();
+    
+    //Generate the mid loops
+    std::set<int> mid_loops_set;
+    for (int loopi = numoutloops; loopi < numloops; ++loopi)
+    {
+        if (kernel->IsDependentOnLoop(loopi) && !kernel->IsContractionLoop(loopi))
+        {
+            mid_loops_set.insert(loopi);
+        }
+    }
+
+    int max_ivar_rank = 0;
+    for (int vari = -1; vari < numinvars; ++vari)
+    { 
+        max_ivar_rank = std::max(max_ivar_rank, kernel->GetVarRank(vari));
+    }
+
+    //Collect of the loop dimensions from all the variables in lowest stride order
+    std::vector<int> mid_loops;
+    for (int rankoff = 0; rankoff < max_ivar_rank; ++rankoff)
+    {
+        for (int vari = numinvars-1; vari >= -1; --vari)
+        {
+            int uvari = MultiKernel->GetUVari(ki, vari);
+            int vidxi = kernel->GetVarRank(vari) - 1 - rankoff;
+            int loopi = vidxi >= 0 ? kernel->GetVarDimLoopNum(vari, vidxi) : -1;
+            auto it = mid_loops_set.find(loopi);
+            if (!sharedmem_uvars[uvari] && it != mid_loops_set.end())
+            {
+                mid_loops.push_back(loopi);
+                mid_loops_set.erase(it);
+            }
+        }
+    }
+
+    //Tack on the rest of the indices
+    for (auto it = mid_loops_set.rbegin(); it != mid_loops_set.rend(); ++it)
+    {
+        mid_loops.push_back(*it);
+    }
+
+    //We want the lowest strides to be in the inner most loops
+    std::reverse(mid_loops.begin(), mid_loops.end());
+    return mid_loops;
+}
+
+
+std::vector<int> OneOutPerThreadExecutor::GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops)
+{
+    //Generate the mid loops
+    int nummidloops = mid_loops.size();
+    std::vector<int> strides(nummidloops);
+    int stride = 1;
+    for (int mloopi = nummidloops - 1; mloopi >= 0; --mloopi)
+    {
+        int loopi = mid_loops[mloopi];
+        strides[mloopi] = stride;
+        stride *= kernel->GetLoopDim(loopi);
+    }
+
+    return strides;
 }
 
 
@@ -240,8 +298,7 @@ std::string OneOutPerThreadExecutor::GenIOutVars()
     for (int loopd = 0; loopd < numoutloops; ++loopd)
     {
         //I[loopd] = (outidx / (Wout[loopd]) % N[loopd];
-        iout_str += "        ";
-        iout_str += "int I" + std::to_string(loopd) + " = ";
+        iout_str += "    int I" + std::to_string(loopd) + " = ";
         if (Wout[loopd] == 1)
         {
             iout_str += "outidx";
@@ -266,66 +323,68 @@ std::string OneOutPerThreadExecutor::GenIOutVars()
 std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &sharedmem_uvars)
 {
     std::string kernel_loops_str;
-
+    int numloops = MultiKernel->GetNumIndices();
+    int numoutloops = MultiKernel->GetNumOuterIndices();       
+    std::vector<bool> hoisted;
+    std::vector<int> loop_strides(numloops);
     for (int ki = 0; ki < MultiKernel->GetNumKernels(); ++ki)
     {
         std::string loop_str = 
-        "        //<KERNELSTR>\n"
-                "<MIDLOOPS>"
-        "            sum = 0.0;\n"
-                    "<CONTLOOPS>"
-        "                sum += <COMPUTE_RHS>;\n"
-                    "<ENDCONTLOOPS>"
-        "            T<OUTUVARI>[<OUTIDX>] <OUT_EQ_OP> sum;\n"
-                "<ENDMIDLOOPS>"
-        "\n";
+        "    //<KERNELSTR>\n"
+            "<MIDLOOPS>"
+        "        sum = 0.0;\n"
+                "<CONTLOOPS>"
+        "            sum += <COMPUTE_RHS>;\n"
+                "<ENDCONTLOOPS>"
+        "        T<OUTUVARI>[<OUTIDX>] <OUT_EQ_OP> sum;\n"
+            "<ENDMIDLOOPS>"
+        "    __syncthreads();\n";     
 
 
         DimensionedKernel *kernel = MultiKernel->Kernels[ki];
-        int numloops = MultiKernel->GetNumIndices();
-        int numoutloops = MultiKernel->GetNumOuterIndices();
-        int numcontloops = kernel->GetNumContractionIndices();
         int numinvars = kernel->GetNumInputVars();
-        
-        //Generate the mid loops
-        int nummidloops = 0;
-        std::string mid_loops_str;
-        std::vector<bool> hoisted(numinvars, false);
-        for (int loopi = numoutloops; loopi < numloops; ++loopi)
-        {
-            if (kernel->IsDependentOnLoop(loopi) && !kernel->IsContractionLoop(loopi))
-            {
-                std::string temp;
-                for (int ivari = 0; ivari < numinvars; ++ ivari)
-                {
-                    int uvari = MultiKernel->GetUVari(ki, ivari);
-                    if (!kernel->IsContractionVar(ivari) &&
-                        kernel->GetVarLoopDepth(ivari) < loopi &&
-                        !sharedmem_uvars[uvari] &&
-                        !hoisted[ivari])
-                    {
-                        std::string ivaristr = std::to_string(ivari);
-                        std::string uvaristr = std::to_string(uvari);
-                        std::string varidxstr = GenVarIndex(ki, ivari);             
-                        temp += "        double hIN" + ivaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
-                        hoisted[ivari] = true;
-                    }
-                }
+        int numcontloops = kernel->GetNumContractionIndices();
+        std::vector<int> mid_loops = GetMidloopsOrder(ki, sharedmem_uvars);
+        std::vector<int> mid_loop_strides = GetMidloopsStrides(kernel, mid_loops);
+        int mid_loops_idx_size = kernel->GetLoopsIdxSize(mid_loops);
 
-                temp += "        #pragma unroll\n";
-                temp += "        for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {";
-                temp += "    // " + MultiKernel->GetLoopIndex(loopi) + "\n";
-                str_replace_all(temp, "<LOOPD>", loopi);
-                str_replace_all(temp, "<LOOP_SIZE>", kernel->GetLoopDim(loopi));
-                mid_loops_str += temp;
-                nummidloops += 1;
+        int outvar_midx_size = 1;
+        for (int vidxi = 0; vidxi < kernel->GetVarRank(-1); ++vidxi)
+        {
+            int loopi = kernel->GetVarDimLoopNum(-1, vidxi);
+            if (loopi >= numoutloops)
+            {
+                outvar_midx_size *= kernel->GetLoopDim(loopi);
             }
         }
-        std::string end_mid_loops_str = "        " + std::string(nummidloops, '}') + "\n";
 
+
+        std::string mid_loops_str;
+        std::string end_mid_loops_str;
+        mid_loops_str = "    for (int midx = threadIdx.x; midx < <MIDXEND>; midx += blockDim.x) {\n";
+        str_replace_all(mid_loops_str, "<MIDXEND>", mid_loops_idx_size);
+        bool first_mid_index = true;
+        for (int mloopi = 0; mloopi < mid_loops.size(); ++mloopi)
+        {
+            int loopi = mid_loops[mloopi];
+            std::string temp;
+            temp += "        int I<LOOPD> = (midx / <LOOP_STRIDE>)";
+            if (!first_mid_index)
+            {
+                temp += " % <LOOP_SIZE>";                    
+            }
+            first_mid_index = false;
+            temp += ";    // " + MultiKernel->GetLoopIndex(loopi) + "\n";
+            str_replace_all(temp, "<LOOPD>", loopi);
+            str_replace_all(temp, "<LOOP_STRIDE>", mid_loop_strides[mloopi]);
+            str_replace_all(temp, "<LOOP_SIZE>", kernel->GetLoopDim(loopi));
+            mid_loops_str += temp;
+        }
+        end_mid_loops_str = "    }\n";
 
         //Generate the contraction loops
         std::string cont_loops_str;
+        std::vector<bool> hoisted(numinvars, false);
         for (int loopi = numoutloops; loopi < numloops; ++loopi)
         {
             if (kernel->IsContractionLoop(loopi))
@@ -339,20 +398,20 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
                         std::string ivaristr = std::to_string(ivari);
                         std::string uvaristr = std::to_string(uvari);
                         std::string varidxstr = GenVarIndex(ki, ivari);     
-                        temp += "            double hIN" + ivaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
+                        temp += "        double hIN" + ivaristr + " = __ldg(&T" + uvaristr + "[" + varidxstr + "]);\n";
                         hoisted[ivari] = true;
                     }
                 }
 
-                temp += "            #pragma unroll\n";
-                temp += "            for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {";
+                temp += "        #pragma unroll\n";
+                temp += "        for (int I<LOOPD> = 0; I<LOOPD> < <LOOP_SIZE>; ++I<LOOPD>) {";
                 temp += "    // " + MultiKernel->GetLoopIndex(loopi) + "\n";
                 str_replace_all(temp, "<LOOPD>", loopi);
                 str_replace_all(temp, "<LOOP_SIZE>", kernel->GetLoopDim(loopi));
                 cont_loops_str += temp;
             }
         }
-        std::string end_cont_loops_str = "            " + std::string(numcontloops, '}') + "\n";
+        std::string end_cont_loops_str = "        " + std::string(numcontloops, '}') + "\n";
 
         //Generate the RHS computation inside the contraction loops
         std::string rhs_str;
@@ -369,7 +428,7 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
             }
             else
             {
-                rhs_str += "__ldg(&T" + std::to_string(uvari) + "[" + GenVarIndex(ki, ivari) + "])";
+                rhs_str += "T" + std::to_string(uvari) + "[" + GenVarIndex(ki, ivari) + "]";
             }
 
             if (ivari < numinvars-1)
@@ -395,13 +454,13 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops(std::vector<bool> &shared
 std::string OneOutPerThreadExecutor::GenVarIndex(int ki, int vari)
 {
     DimensionedKernel *kernel = MultiKernel->Kernels[ki];
-    std::string indexStr = "I" + std::to_string(kernel->GetVarDimLoopNum(vari, 0)) + "*" +
-                            std::to_string(kernel->GetVarDimStride(vari, 0));                         
+    std::string indexStr = "__mul24(I" + std::to_string(kernel->GetVarDimLoopNum(vari, 0)) + "," +
+                            std::to_string(kernel->GetVarDimStride(vari, 0)) + ")";                         
     for (int d = 1; d < kernel->GetVarRank(vari); ++d)
     {
         indexStr += " + ";
-        indexStr += "I" + std::to_string(kernel->GetVarDimLoopNum(vari, d)) + "*" +
-                          std::to_string(kernel->GetVarDimStride(vari, d));                                   
+        indexStr += "__mul24(I" + std::to_string(kernel->GetVarDimLoopNum(vari, d)) + "," +
+                          std::to_string(kernel->GetVarDimStride(vari, d)) + ")";                                   
     }
     return indexStr;
 }

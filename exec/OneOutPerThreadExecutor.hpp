@@ -29,6 +29,8 @@ class OneOutPerThreadExecutor : public KernelExecutor
     void GenerateCudaKernel();
     void ReorderIndices(std::vector<std::string> &mk_outer_indices);
     std::vector<bool> GetSharedMemUvars();
+    std::vector<int> GetMidloopsOrder(int ki, std::vector<bool> &sharedmem_uvars);
+    std::vector<int> GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops);
 
     std::string GenSharedMemPreload(std::vector<bool> &sharedmem_uvars);
     std::string GenIOutVars();

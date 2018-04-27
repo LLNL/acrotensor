@@ -106,6 +106,18 @@ int DimensionedKernel::GetContIdxSize()
     return contidx_size;
 }
 
+
+int DimensionedKernel::GetLoopsIdxSize(std::vector<int> loops)
+{
+    int idx_size = 1;
+    for (auto loopi : loops)
+    {
+        idx_size *= LoopDims[loopi];
+    }
+    return idx_size;
+}
+
+
 int DimensionedKernel::GetIdxSizeForFirstNumLoops(int num_loops)
 {
     ACROBATIC_ASSERT(num_loops <= GetNumIndices());

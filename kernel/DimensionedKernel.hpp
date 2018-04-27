@@ -45,6 +45,9 @@ class DimensionedKernel : public TensorKernel
     //Get the number of indices in the first num_loops
     int GetIdxSizeForFirstNumLoops(int num_loops);
 
+    //Get the number of indices in the list of loops
+    int GetLoopsIdxSize(std::vector<int> loops);
+
     //The size of the vari tensor's dim
     int GetVarDimSize(int vari, int dim) {return LoopDims[GetVarDimLoopNum(vari, dim)];}
 
