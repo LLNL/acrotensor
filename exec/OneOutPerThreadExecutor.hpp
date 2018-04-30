@@ -28,16 +28,29 @@ class OneOutPerThreadExecutor : public KernelExecutor
     private:
     void GenerateCudaKernel();
     void ReorderIndices(std::vector<std::string> &mk_outer_indices);
+    int GetNumBlockLoops();
+    int GetMinMidIdxSize(int num_block_loops);
+    int GetMinMidIdxCount(int num_block_loops);
     std::vector<bool> GetSharedMemUvars();
     std::vector<int> GetMidloopsOrder(int ki, std::vector<bool> &sharedmem_uvars);
     std::vector<int> GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops);
 
     std::string GenSharedMemPreload(std::vector<bool> &sharedmem_uvars);
-    std::string GenIOutVars();
+    std::string GenInitIndices();
     std::string GenSubKernelLoops(std::vector<bool> &sharedmem_uvars);
-    std::string GenVarIndex(int ki, int vari);
+    std::string GenTensor(int ki, int vari);
+    std::string GenTensor(int uvari);
+    std::string GenMidLoopIndices(int ki, std::vector<int> &mid_loops, std::vector<int> &mid_loop_strides, int blocki = -1);
+    std::string GenVarIndex(int ki, int vari, int blocki = -1);
+    std::string GenVarSubIndex(int ki, int vari, int dimi, int blocki = -1);
+    std::string GenLoopIndex(int ki, int loopi, int blocki = -1);
+    
     cudaDeviceProp CudaDeviceProp;
     CudaKernel *TheCudaKernel;
+
+    int NumBlockLoops;
+    double **HDeviceTensors;
+    std::vector<void*> KernelParams;
 };
 
 }

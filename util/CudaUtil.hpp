@@ -49,6 +49,7 @@ class CudaKernel
    int MemReadsPerIndex;
    int NumBlocks;
    int ThreadsPerBlock;
+   int MaxRegCount;
    bool IsMultipleBlockPerOutput;
 
    private:

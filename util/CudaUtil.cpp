@@ -18,6 +18,7 @@ CudaKernel::CudaKernel() :
     MemReadsPerIndex(0),
     NumBlocks(0),
     ThreadsPerBlock(0),
+    MaxRegCount(-1),
     IsMultipleBlockPerOutput(true)
 {
 
@@ -49,10 +50,12 @@ void CudaKernel::GenerateFunction()
                                           0,             // numHeaders
                                           NULL,          // headers
                                           NULL));        // includeNames
-    const char *opts[] = {"--restrict", "--use_fast_math", "--gpu-architecture=compute_60", "-lineinfo"};
-    //const char *opts[] = {"--restrict", "--use_fast_math", "-lineinfo"};
+
+    std::string regstr = "--maxrregcount=" + std::to_string(MaxRegCount);
+    const char *opts[5] = {"--restrict","--use_fast_math","--gpu-architecture=compute_60","-lineinfo",regstr.c_str()};
+    int num_options = (MaxRegCount > 0) ? 5 : 4;
     nvrtcResult rcode = nvrtcCompileProgram(prog,  // prog
-                                            4,     // numOptions
+                                            num_options,     // numOptions
                                             opts); // options
     if (rcode != NVRTC_SUCCESS)
     {

@@ -86,9 +86,9 @@ void DimensionedMultiKernel::InitMKLVars()
                                                     SharedOuterIndexNames.end(), remove_list[ri]),
                                         SharedOuterIndexNames.end());
         }
-    }    
+    }
 
-    //Finally reorder the indices to put any outer shared outer indices first
+    //Reorder the indices to put shared outer indices first
     std::vector<std::string> reordered_indices = SharedOuterIndexNames;
     for (int idxi = 0; idxi < AllIndexNames.size(); ++idxi)
     {
@@ -99,7 +99,38 @@ void DimensionedMultiKernel::InitMKLVars()
             reordered_indices.push_back(idx);
         }
     }
+    SetLoopIndices(reordered_indices);
 
+    //Finally Reorder the Shared outer indices by size (largest first)
+    reordered_indices.clear();
+    reordered_indices.resize(SharedOuterIndexNames.size());
+    std::set<std::string> set_indices(SharedOuterIndexNames.begin(), SharedOuterIndexNames.end());
+    for (int i = 0; i < reordered_indices.size(); ++i)
+    {
+        int biggest_loop_size = -1;
+        std::string biggest_idx;
+        for (auto idx : set_indices)
+        {
+            int loop_size = GetLoopDim(idx);
+            if (loop_size > biggest_loop_size)
+            {
+                biggest_loop_size = loop_size;
+                biggest_idx = idx;
+            }
+        }
+        set_indices.erase(biggest_idx);
+        reordered_indices[i] = biggest_idx;
+    }
+    SharedOuterIndexNames = reordered_indices;
+    for (int idxi = 0; idxi < AllIndexNames.size(); ++idxi)
+    {
+        std::string idx = AllIndexNames[idxi];
+        auto it = std::find(reordered_indices.begin(), reordered_indices.end(), idx);
+        if (it == reordered_indices.end())
+        {
+            reordered_indices.push_back(idx);
+        }
+    }
     SetLoopIndices(reordered_indices);
 }
 
@@ -155,6 +186,17 @@ void DimensionedMultiKernel::SetLoopIndices(std::vector<std::string> &idx_list)
 }
 
 
+int DimensionedMultiKernel::GetIndexLoopNum(std::string &idx)
+{
+    auto it = std::find(LoopIndices.begin(), LoopIndices.end(), idx);
+    if (it == LoopIndices.end())
+    {
+        return -1;
+    }
+    return std::distance(LoopIndices.begin(), it);
+}
+
+
 int DimensionedMultiKernel::GetVarRank(int ki, int vari)
 {
     return Kernels[ki]->GetVarRank(vari);
@@ -172,6 +214,16 @@ int DimensionedMultiKernel::GetLoopNumVarDim(int loop_num, int ki, int vari)
     return Kernels[ki]->GetVarDimLoopNum(loop_num, vari);
 }
 
+
+std::string DimensionedMultiKernel::GetDimensionedNameString()
+{
+    std::string dimensioned_name;
+    for (auto kernel : Kernels)
+    {
+        dimensioned_name += kernel->GetDimensionedNameString() + ";";
+    }
+    return dimensioned_name;
+}
 
 bool DimensionedMultiKernel::IsVarDependentOnLoop(int ki, int vari, int loop_num)
 {

@@ -43,7 +43,10 @@ class DimensionedMultiKernel
     //The number of input variables referenced in the kernel
     int GetNumOutputVars();
 
+    std::string GetDimensionedNameString();
+
     std::string GetLoopIndex(int loopi) {return LoopIndices[loopi];}
+    int GetIndexLoopNum(std::string &idx);
 
     //Change the order of the loops which will affect the following loop_num functions and the values of Var->LoopNums
     void SetLoopIndices(std::vector<std::string> &idx_list);
@@ -74,6 +77,7 @@ class DimensionedMultiKernel
     //The dimensions of all the loops now that we have attached tensors
     const std::vector<int> &GetLoopDims() {return LoopDims;}
     int GetLoopDim(int i) {return LoopDims[i];}
+    int GetLoopDim(std::string &idx) {return GetLoopDim(GetIndexLoopNum(idx));}
     int GetLoopStride(int i) {return LoopStrides[i];}
 
     //The the number of index combinations for all the loops (the product of the loop dims)

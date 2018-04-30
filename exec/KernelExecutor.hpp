@@ -18,7 +18,7 @@ class KernelExecutor
     public:
     KernelExecutor(DimensionedMultiKernel *multi_kernel);
     static KernelExecutor *Create(std::string exec_type, DimensionedMultiKernel *multi_kernel);
-    ~KernelExecutor();
+    virtual ~KernelExecutor();
 
     virtual std::string GetImplementation() = 0;
     virtual std::string GetExecType() = 0;

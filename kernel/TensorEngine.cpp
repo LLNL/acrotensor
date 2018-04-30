@@ -686,18 +686,19 @@ void TensorEngine::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
 
 void TensorEngine::Clear()
 {
-    for (auto it = KernelMap.begin(); it != KernelMap.end(); ++it)
+    for (auto kernel : KernelMap)
     {
-        delete it->second;
+        delete kernel.second;
     }
-    for (auto it = DimensionedKernelMap.begin(); it != DimensionedKernelMap.end(); ++it)
+    KernelMap.clear();
+    for (auto dimensioned_kernel : DimensionedKernelMap)
     {
-        delete it->second;
+        delete dimensioned_kernel.second;
     }
     DimensionedKernelMap.clear();
-    for (auto it = ExecutorMap.begin(); it != ExecutorMap.end(); ++it)
+    for (auto executor : ExecutorMap)
     {
-        delete it->second;
+        delete executor.second;
     }
     ExecutorMap.clear();
 
