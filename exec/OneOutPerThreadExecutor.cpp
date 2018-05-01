@@ -115,7 +115,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     "__global__ void <KERNEL_NAME>(<PARAMS>)\n"
     "{\n"
     "    double sum;\n"
-    "    const int outidx = blockIdx.x;//*blockDim.x+threadIdx.x;\n"
+    "    const int outidx = blockIdx.x;\n"
     "    if (outidx > <OUTIDX_SIZE>) return;\n"
     "\n"
         "<PRELOAD_SMVARS>"
@@ -132,7 +132,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     NumBlockLoops = GetNumBlockLoops();
     int outidx_size = MultiKernel->GetIdxSizeForFirstNumLoops(NumBlockLoops);
     TheCudaKernel->FunctionName = "Kernel";
-    TheCudaKernel->ThreadsPerBlock = 256;
+    TheCudaKernel->ThreadsPerBlock = GetNumThreadsPerBlock(NumBlockLoops);
     TheCudaKernel->NumBlocks = outidx_size;    
 
     //Generate the params list
@@ -160,6 +160,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     //Generate the indices outside the contraction loop
     std::string init_indices_str = GenInitIndices();
 
+
     //Generate the subkernel loops
     std::string subkernel_loops_str = GenSubKernelLoops(sharedmem_uvars);
 
@@ -180,16 +181,15 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
 
 int OneOutPerThreadExecutor::GetNumBlockLoops()
 {
-    int num_block_loops = 0;
-    for (int loopi = 0; loopi < MultiKernel->GetNumOuterIndices(); ++loopi)
+    int loopi;
+    for (loopi = 0; loopi < MultiKernel->GetNumOuterIndices(); ++loopi)
     {
-        num_block_loops = loopi;
-        if (MultiKernel->GetIdxSizeForFirstNumLoops(loopi) >= 4096 || GetMinMidIdxSize(num_block_loops) < 128)
+        if (MultiKernel->GetIdxSizeForFirstNumLoops(loopi) >= 4096 || GetMinMidIdxSize(loopi) < 128)
         {
             break;
         }
     }
-    return num_block_loops;
+    return loopi;
 }
 
 
@@ -213,6 +213,43 @@ int OneOutPerThreadExecutor::GetMinMidIdxSize(int num_block_loops)
     return min_idx_size;
 }
 
+
+int OneOutPerThreadExecutor::GetMaxMidIdxSize(int num_block_loops)
+{
+    int numloops = MultiKernel->GetNumIndices();
+    int max_idx_size = -1;
+    for (int ki = 0; ki < MultiKernel->GetNumKernels(); ++ki)
+    {
+        DimensionedKernel *kernel = MultiKernel->Kernels[ki];
+        std::vector<int> mid_loops;
+        for (int loopi = num_block_loops; loopi < numloops; ++loopi)
+        {
+            if (kernel->IsDependentOnLoop(loopi) && !kernel->IsContractionLoop(loopi))
+            {
+                mid_loops.push_back(loopi);
+            }
+        }        
+        max_idx_size = std::max(max_idx_size, kernel->GetLoopsIdxSize(mid_loops));
+    }
+    return max_idx_size;
+}
+
+
+int OneOutPerThreadExecutor::GetNumThreadsPerBlock(int num_block_loops)
+{
+    int min = GetMinMidIdxSize(num_block_loops);
+    int max = GetMaxMidIdxSize(num_block_loops);
+    int block_size;
+    for (block_size = 64; block_size < 512; block_size *= 2)
+    {
+        if (block_size > max || block_size > int(1.3*float(min)))
+        {
+            break;
+        } 
+    }
+    std::cout << block_size << std::endl;
+    return block_size;
+}
 
 std::vector<bool> OneOutPerThreadExecutor::GetSharedMemUvars()
 {

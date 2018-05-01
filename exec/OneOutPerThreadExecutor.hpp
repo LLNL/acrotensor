@@ -30,7 +30,8 @@ class OneOutPerThreadExecutor : public KernelExecutor
     void ReorderIndices(std::vector<std::string> &mk_outer_indices);
     int GetNumBlockLoops();
     int GetMinMidIdxSize(int num_block_loops);
-    int GetMinMidIdxCount(int num_block_loops);
+    int GetMaxMidIdxSize(int num_block_loops);
+    int GetNumThreadsPerBlock(int num_block_loops);
     std::vector<bool> GetSharedMemUvars();
     std::vector<int> GetMidloopsOrder(int ki, std::vector<bool> &sharedmem_uvars);
     std::vector<int> GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops);
