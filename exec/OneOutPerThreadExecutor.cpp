@@ -112,11 +112,13 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     TheCudaKernel = new CudaKernel;
     TheCudaKernel->Code = 
     "extern \"C\"  \n"
-    "__global__ void <KERNEL_NAME>(<PARAMS>)\n"
+    "__global__\n"
+    "__launch_bounds__(<BLOCK_SIZE>)\n"
+    "void <KERNEL_NAME>(<PARAMS>)\n"
     "{\n"
     "    double sum;\n"
     "    const int outidx = blockIdx.x;\n"
-    "    if (outidx > <OUTIDX_SIZE>) return;\n"
+    "    //if (outidx >= <OUTIDX_SIZE>) return;\n"
     "\n"
         "<PRELOAD_SMVARS>"
     "\n"
@@ -164,6 +166,8 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     //Generate the subkernel loops
     std::string subkernel_loops_str = GenSubKernelLoops(sharedmem_uvars);
 
+    str_replace_all(TheCudaKernel->Code, "<BLOCK_SIZE>", TheCudaKernel->ThreadsPerBlock);
+    str_replace_all(TheCudaKernel->Code, "<BLOCKS_PER_SM>", 4096 / TheCudaKernel->ThreadsPerBlock);
     str_replace_all(TheCudaKernel->Code, "<KERNEL_NAME>", TheCudaKernel->FunctionName);
     str_replace_all(TheCudaKernel->Code, "<PARAMS>", params_str);
     str_replace_all(TheCudaKernel->Code, "<NUMUVARS>", MultiKernel->GetNumUVars());
@@ -173,8 +177,8 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
     str_replace_all(TheCudaKernel->Code, "<SUBKERNEL_LOOPS>", subkernel_loops_str);
 
     //std::cout << TheCudaKernel->Code << std::endl;
-    std::cout << MultiKernel->GetDimensionedNameString() << std::endl;
-    TheCudaKernel->WriteCodeToFile("kernel.cu");
+    //std::cout << MultiKernel->GetDimensionedNameString() << std::endl;
+    //TheCudaKernel->WriteCodeToFile("kernel.cu");
     TheCudaKernel->GenerateFunction();
 }
 
@@ -247,7 +251,7 @@ int OneOutPerThreadExecutor::GetNumThreadsPerBlock(int num_block_loops)
             break;
         } 
     }
-    std::cout << block_size << std::endl;
+    //std::cout << block_size << std::endl;
     return block_size;
 }
 

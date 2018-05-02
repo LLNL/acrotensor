@@ -22,36 +22,58 @@ class CPUInterpretedExecutor : public KernelExecutor
     virtual std::string GetExecType() {return "CPUInterpreted";}
 
     private:
-    void Execute1Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute2Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute3Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute4Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute5Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute6Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute7Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute8Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute9Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute10Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute11Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void Execute12Loops(Tensor *output, std::vector<Tensor*> &inputs);
-    void ExecuteArbitraryLoops(Tensor *output, std::vector<Tensor*> &inputs);
+    void Execute1Loops();
+    void Execute2Loops();
+    void Execute3Loops();
+    void Execute4Loops();
+    void Execute5Loops();
+    void Execute6Loops();
+    void Execute7Loops();
+    void Execute8Loops();
+    void Execute9Loops();
+    void Execute10Loops();
+    void Execute11Loops();
+    void Execute12Loops();
+    void ExecuteArbitraryLoops();
 
-    inline double ComputeRHS(const std::vector<Tensor*> &inputs, const int *RESTRICT I);
+    inline double ComputeRHS(const int *RESTRICT I);
+    inline int ComputeRawIdx(const int *RESTRICT I, const int *loop_nums, const int *var_stride, int rank);
 
-    int *OutputLoopNums;
     int NumInVars;
+    int NumLoops;
+    std::vector<int> N;
+
+    int OutputRank;
+    double *OutputVar;
+    int *OutputLoopNums;
+    int *OutputStrides;
+
+    int *InputRanks;
+    double **InputVars;
     int **InputLoopNums;
+    int **InputStrides;
 };
 
 
-inline double CPUInterpretedExecutor::ComputeRHS(const std::vector<Tensor*> &inputs, const int *RESTRICT I)
+inline double CPUInterpretedExecutor::ComputeRHS(const int *RESTRICT I)
 {
-    double rhs_val = (*inputs[0])[ComputeRawIdx(*inputs[0], I, InputLoopNums[0])];
-    for (unsigned int vari = 1; vari < NumInVars; ++vari)
+    double rhs_val = InputVars[0][ComputeRawIdx(I, InputLoopNums[0], InputStrides[0], InputRanks[0])];
+    for (int vari = 1; vari < NumInVars; ++vari)
     {
-        rhs_val *= (*inputs[vari])[ComputeRawIdx(*inputs[vari], I, InputLoopNums[vari])];
+        rhs_val *= InputVars[vari][ComputeRawIdx(I, InputLoopNums[vari], InputStrides[vari], InputRanks[vari])];
     }
     return rhs_val;
+}
+
+
+inline int CPUInterpretedExecutor::ComputeRawIdx(const int *RESTRICT I, const int *loop_nums, const int *var_stride, int rank)
+{   
+    int raw_idx = I[loop_nums[0]]*var_stride[0];
+    for (int d = 1; d < rank; ++d)
+    {
+        raw_idx += I[loop_nums[d]]*var_stride[d];
+    }
+    return raw_idx;
 }
 
 }

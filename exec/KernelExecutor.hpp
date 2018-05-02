@@ -25,8 +25,6 @@ class KernelExecutor
     virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs) = 0;
     virtual void ExecuteMulti(std::vector<Tensor*> &output, std::vector<std::vector<Tensor*> > &inputs);
 
-    inline int ComputeRawIdx(const Tensor &T, const int *RESTRICT I, const int *loop_nums);
-
 #ifdef ACRO_HAVE_CUDA    
     inline void SetCudaStream(cudaStream_t cuda_stream) {TheCudaStream = cuda_stream;}
 #endif
@@ -45,17 +43,6 @@ class KernelExecutor
     cudaStream_t TheCudaStream;
 #endif    
 };
-
-
-inline int KernelExecutor::ComputeRawIdx(const Tensor &T, const int *RESTRICT I, const int *loop_nums)
-{   
-    int raw_idx = I[loop_nums[0]]*T.GetStride(0);
-    for (int d = 1; d < T.GetRank(); ++d)
-    {
-        raw_idx += I[loop_nums[d]]*T.GetStride(d);
-    }
-    return raw_idx;
-}
 
 }
 

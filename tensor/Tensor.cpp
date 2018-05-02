@@ -380,14 +380,16 @@ void Tensor::MapToGPU()
 void Tensor::MoveToGPU()
 {
 #ifdef ACRO_HAVE_CUDA   
-    ACROBATIC_ASSERT(!IsOnGPU(), "Trying to move data on the GPU to the GPU.");
     if (!IsMappedToGPU())
     {
         MapToGPU();
     }
-    ensureCudaContext();
-    acroCudaErrorCheck(cudaMemcpy(DeviceData, Data, ByteSize, cudaMemcpyHostToDevice));
-    OnGPU = true;
+    if (!IsOnGPU())
+    {
+        ensureCudaContext();
+        acroCudaErrorCheck(cudaMemcpy(DeviceData, Data, ByteSize, cudaMemcpyHostToDevice));
+        OnGPU = true;
+    }
 #endif
 }
 
@@ -416,10 +418,12 @@ void Tensor::UnmapFromGPU()
 void Tensor::MoveFromGPU()
 {
 #ifdef ACRO_HAVE_CUDA
-    ACROBATIC_ASSERT(IsOnGPU(), "Tensor data is not marked as on the GPU so moving it from there is in error.");
-    ensureCudaContext();
-    acroCudaErrorCheck(cudaMemcpy(Data, DeviceData, ByteSize, cudaMemcpyDeviceToHost));
-    OnGPU = false;
+    if (IsOnGPU())
+    {
+        ensureCudaContext();
+        acroCudaErrorCheck(cudaMemcpy(Data, DeviceData, ByteSize, cudaMemcpyDeviceToHost));
+        OnGPU = false;
+    }
 #endif
 }
 
@@ -427,7 +431,6 @@ void Tensor::MoveFromGPU()
 void Tensor::SwitchFromGPU()
 {
 #ifdef ACRO_HAVE_CUDA
-    ACROBATIC_ASSERT(IsMappedToGPU());
     OnGPU = false;
 #endif
 }

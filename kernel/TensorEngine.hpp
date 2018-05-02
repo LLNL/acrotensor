@@ -31,6 +31,7 @@ class TensorEngine
     ~TensorEngine();
     void SetExecutorType(const char *bare_exec_type);
     void SetExecutorType(std::string &exec_type);
+    std::string GetExecType() {return ExecutorType;}
 
     void operator()(const char *bare_kernel_str, Tensor &out, Tensor &in1);
     void operator()(const char *bare_kernel_str, Tensor &out, Tensor &in1, Tensor &in2);
