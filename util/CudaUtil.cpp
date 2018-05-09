@@ -140,6 +140,46 @@ __global__ void CudaMult(double *d, double c, int N)
 }
 
 
+__device__ int2 CudaWarpSort(int2 val)
+{
+    int2 val2 = val;
+    // const int lanei = threadIdx.x % 32;
+    // const bool odd = threadIdx.x % 2 == 1;
+    // const bool even = !odd;
+    // bool comp_less;
+    // int2 comp_val;
+    // for (int pass = 0; pass < 32; ++pass)
+    // {
+    //     //Even pass
+    //     comp_val.x = __shfl_sync(0xFFFF, val, lanei + even - odd);
+    //     comp_val.y = __shfl_sync(0xFFFF, val, lanei + even - odd);
+    //     comp_less = (comp_val.x < val.x) || ((comp_val.x == val.x) && (comp_val.y < val.y));
+    //     val.x = int(even && (comp_less) || odd && (!comp_less)) * comp_val.x +
+    //             int(even && (!comp_less) || odd && (comp_less)) * val.x;
+    //     val.y = int(even && (comp_less) || odd && (!comp_less)) * comp_val.y +
+    //             int(even && (!comp_less) || odd && (comp_less)) * val.y;              
+
+    //     //Odd pass
+    //     comp_val.x = __shfl_sync(0xFFFF, val, min(max(lanei - even + odd, 0), 31));
+    //     comp_val.y = __shfl_sync(0xFFFF, val, min(max(lanei - even + odd, 0), 31));        
+    //     comp_less = (comp_val.x < val.x) || (comp_val.x == val.x) && (comp_val.y < val.y);
+    //     val.x = int(odd && (comp_less) || even && (!comp_less)) * comp_val.x +
+    //             int(odd && (!comp_less) || even && (comp_less)) * val.x;
+    //     val.y = int(odd && (comp_less) || even && (!comp_less)) * comp_val.y +
+    //             int(odd && (!comp_less) || even && (comp_less)) * val.y;
+    // }
+    return val2;
+}
+
+
+__device__ int2 shfl_sync_int2(unsigned mask, int2 val, int srcLane, int width)
+{
+    int2 retval;
+    retval.x = __shfl_sync(mask, val.x, srcLane, width);
+    retval.y = __shfl_sync(mask, val.y, srcLane, width);
+    return retval;
+}
+
 }
 
 #endif

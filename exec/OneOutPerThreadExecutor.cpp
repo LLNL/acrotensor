@@ -61,7 +61,7 @@ void OneOutPerThreadExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*>
     }
 
     TheCudaKernel->Launch(KernelParams);
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 }
 
 
@@ -97,7 +97,7 @@ void OneOutPerThreadExecutor::ExecuteMulti(std::vector<Tensor*> &outputs, std::v
         KernelParams[uvari] = &(HDeviceTensors[uvari]);
     }
     TheCudaKernel->Launch(KernelParams);
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 }
 
 

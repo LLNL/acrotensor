@@ -23,6 +23,10 @@ class CudaGPUOps : public NonContractionOps
     void BatchMatrixInverse(Tensor &out, Tensor &in);
     void BatchMatrixDet(Tensor &Adet, Tensor &A);
     void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A);
+
+    void FlatIndexedScatter(Tensor &Aout, Tensor &Ain, IndexMapping &M);
+    void FlatIndexedSumGather(Tensor &Aout, Tensor &Ain, IndexMapping &M);
+
 };
 
 
@@ -35,6 +39,8 @@ __global__ void CudaDet3x3(double *Adet, double *A, int N);
 __global__ void CudaInvDet1x1(double *Ainv, double *Adet, double *A, int N);
 __global__ void CudaInvDet2x2(double *Ainv, double *Adet, double *A, int N);
 __global__ void CudaInvDet3x3(double *Ainv, double *Adet, double *A, int N);
+__global__ void CudaScatter(double *Aout, double *Ain, int *M, int *invM, int *invMOff, int N);
+__global__ void CudaSumGather(double *Aout, double *Ain, int *M, int *invM, int *invMOff, int N);
 
 }
 

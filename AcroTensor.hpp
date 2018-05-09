@@ -6,3 +6,4 @@
 #include "TensorEngine.hpp"
 #include "Executor.hpp"
 #include "SliceTensor.hpp"
+#include "Ops.hpp"

@@ -80,6 +80,31 @@ void CudaGPUOps::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
 }
 
 
+void CudaGPUOps::FlatIndexedScatter(Tensor &Aout, Tensor &Ain, IndexMapping &M)
+{
+    double *Aout_ptr = Aout.GetDeviceData();
+    double *Ain_ptr = Ain.GetDeviceData();
+    int *M_ptr = M.GetMap().GetDeviceData();
+    int *InvM_ptr = M.GetInvMap().GetDeviceData();
+    int *InvMOff_ptr = M.GetInvMapOffsets().GetDeviceData();
+    int N = M.GetRangeSize();
+    CudaScatter<<<N/128+1,128>>>(Aout_ptr, Ain_ptr, M_ptr, InvM_ptr, InvMOff_ptr, N);
+}
+
+
+void CudaGPUOps::FlatIndexedSumGather(Tensor &Aout, Tensor &Ain, IndexMapping &M)
+{
+    double *Aout_ptr = Aout.GetDeviceData();
+    double *Ain_ptr = Ain.GetDeviceData();
+    int *M_ptr = M.GetMap().GetDeviceData();
+    int *InvM_ptr = M.GetInvMap().GetDeviceData();
+    int *InvMOff_ptr = M.GetInvMapOffsets().GetDeviceData();
+    int N = M.GetDomainSize();
+
+    CudaSumGather<<<N/128+1,128>>>(Aout_ptr, Ain_ptr, M_ptr, InvM_ptr, InvMOff_ptr, N);
+}
+
+
 __global__ void CudaInv1x1(double *Ainv, double *A, int N)
 {
     int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -245,9 +270,38 @@ __global__ void CudaInvDet3x3(double *Ainv, double *Adet, double *A, int N)
         Ainv[b+5] = invdet*(A1*A6 - A0*A7);
         Ainv[b+6] = invdet*(A1*A5 - A2*A4);
         Ainv[b+7] = invdet*(A2*A3 - A0*A5);
-        Ainv[b+8] = invdet*(A0*A4 - A1*A3);        
+        Ainv[b+8] = invdet*(A0*A4 - A1*A3);
     }
 }
 
+
+__global__ void CudaScatter(double *Aout, double *Ain, int *M, int *invM, int *invMOff, int N)
+{
+    int i = blockIdx.x*blockDim.x + threadIdx.x;
+    if (i < N)
+    {
+        Aout[i] = Ain[M[i]];
+    }
 }
+
+
+__global__ void CudaSumGather(double *Aout, double *Ain, int *M, int *invM, int *invMOff, int N)
+{
+    int iout = blockIdx.x*blockDim.x + threadIdx.x;
+    if (iout < N)
+    {
+        int in_beg = invMOff[iout];
+        int in_end = invMOff[iout + 1];
+        double sum = 0.0;
+        for (int iin = in_beg; iin < in_end; ++iin)
+        {
+            sum += Ain[invM[iin]];
+        }
+        Aout[iout] = sum;
+    }
+}
+
+
+}
+
 #endif

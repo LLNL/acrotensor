@@ -22,13 +22,16 @@ class NativeCPUOps : public NonContractionOps
     void BatchMatrixDet(Tensor &Adet, Tensor &A);
     void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A);
 
+    void FlatIndexedScatter(Tensor &Aout, Tensor &Ain, IndexMapping &M);
+    void FlatIndexedSumGather(Tensor &Aout, Tensor &Ain, IndexMapping &M);
+
     private:
     inline void Inv1x1(double *Ainv, double *A, double det);
     inline void Inv2x2(double *Ainv, double *A, double det);
     inline void Inv3x3(double *Ainv, double *A, double det);
     inline double Det1x1(double *A);
     inline double Det2x2(double *A);
-    inline double Det3x3(double *A);    
+    inline double Det3x3(double *A);
 };
 
 

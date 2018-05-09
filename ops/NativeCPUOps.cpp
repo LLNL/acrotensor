@@ -122,4 +122,28 @@ void NativeCPUOps::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
     }
 }
 
+
+void NativeCPUOps::FlatIndexedScatter(Tensor &Aout, Tensor &Ain, IndexMapping &M)
+{
+    IndexVector &I = M.GetMap();
+    for (int i = 0; i < I.GetSize(); i++)
+    {
+        Aout[i] = Ain[I[i]];
+    }
+}
+
+
+void NativeCPUOps::FlatIndexedSumGather(Tensor &Aout, Tensor &Ain, IndexMapping &M)
+{
+    IndexVector &I = M.GetMap();
+    Aout.Set(0.0);
+    for (int i = 0; i < I.GetSize(); i++)
+    {
+        Aout[I[i]] += Ain[i];
+    }
+}
+
+
+
+
 }

@@ -630,8 +630,8 @@ void TensorEngine::BatchMatrixInverse(Tensor &Ainv, Tensor &A)
     ACROBATIC_ASSERT(Ainv.GetDim(rank-1) == Ainv.GetDim(rank-2), "Can't BatchMatrixInverse with mismatched dims for m,n.")
     ACROBATIC_ASSERT(Ainv.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
 
-    SwitchTensorToComputeLocation(Ainv);
-    MoveTensorToComputeLocation(A);
+    SwitchToComputeLocation(Ainv);
+    MoveToComputeLocation(A);
 
     Ops->BatchMatrixInverse(Ainv, A);
 }
@@ -649,8 +649,8 @@ void TensorEngine::BatchMatrixDet(Tensor &Adet, Tensor &A)
     ACROBATIC_ASSERT(A.GetDim(rank-1) == A.GetDim(rank-2), "Can't BatchMatrixDet with mismatched dims for m,n in the matrix.")
     ACROBATIC_ASSERT(A.GetDim(rank-1) <= 3, "Can't BatchMatrixInverse with matrix dims > 3.")
 
-    SwitchTensorToComputeLocation(Adet);
-    MoveTensorToComputeLocation(A);
+    SwitchToComputeLocation(Adet);
+    MoveToComputeLocation(A);
 
     Ops->BatchMatrixDet(Adet, A);
 }
@@ -676,12 +676,38 @@ void TensorEngine::BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A)
     }
     ACROBATIC_ASSERT(A.GetDim(rank-1) == A.GetDim(rank-2), "Can't BatchMatrixDet with mismatched dims for m,n in the matrix.")
 
-    SwitchTensorToComputeLocation(Ainv);
-    SwitchTensorToComputeLocation(Adet);
-    MoveTensorToComputeLocation(A);
+    SwitchToComputeLocation(Ainv);
+    SwitchToComputeLocation(Adet);
+    MoveToComputeLocation(A);
 
     Ops->BatchMatrixInvDet(Ainv, Adet, A);
 }
+
+
+void TensorEngine::FlatIndexedScatter(Tensor &Aout, Tensor &Ain, IndexMapping &M)
+{
+    ACROBATIC_ASSERT(Aout.GetSize() == M.GetRangeSize(), "IndexMapping RangeSize does not match the output Tensor size.");
+    SwitchToComputeLocation(Aout);
+    MoveToComputeLocation(Ain);
+    MoveToComputeLocation(M);
+    Ops->FlatIndexedScatter(Aout, Ain, M);
+}
+
+
+void TensorEngine::FlatIndexedSumGather(Tensor &Aout, Tensor &Ain, IndexMapping &M)
+{
+    ACROBATIC_ASSERT(Aout.GetSize() == M.GetDomainSize(), "IndexMapping DomainSize does not match the output Tensor size.");
+    if(!M.IsInverseComputed())
+    {
+        M.ComputeInverse();
+    }
+    SwitchToComputeLocation(Aout);
+    MoveToComputeLocation(Ain);
+    MoveToComputeLocation(M);
+    Ops->FlatIndexedSumGather(Aout, Ain, M);
+}
+
+
 
 
 void TensorEngine::Clear()
@@ -710,39 +736,52 @@ void TensorEngine::Clear()
 }
 
 
-void TensorEngine::MoveTensorToComputeLocation(Tensor &T)
+void TensorEngine::MoveToComputeLocation(Tensor &T)
 {
     if (ComputeLocation == "CPU")
     {
-        if (T.IsOnGPU())
-        {
-            T.MoveFromGPU();
-        }
+        T.MoveFromGPU();
     }
     else if (ComputeLocation == "GPU")
     {
-        if (!T.IsOnGPU())
-        {
-            T.MoveToGPU();
-        }
+        T.MoveToGPU();
     }
 }
 
-void TensorEngine::SwitchTensorToComputeLocation(Tensor &T)
+void TensorEngine::SwitchToComputeLocation(Tensor &T)
 {
     if (ComputeLocation == "CPU")
     {
-        if (T.IsOnGPU())
-        {
-            T.SwitchFromGPU();
-        }
+        T.SwitchFromGPU();
     }
     else if (ComputeLocation == "GPU")
     {
-        if (!T.IsOnGPU())
-        {
-            T.SwitchToGPU();
-        }
+        T.SwitchToGPU();
+    }
+}
+
+
+void TensorEngine::MoveToComputeLocation(IndexMapping &M)
+{
+    if (ComputeLocation == "CPU")
+    {
+        M.MoveFromGPU();
+    }
+    else if (ComputeLocation == "GPU")
+    {
+        M.MoveToGPU();
+    }
+}
+
+void TensorEngine::SwitchToComputeLocation(IndexMapping &M)
+{
+    if (ComputeLocation == "CPU")
+    {
+        M.SwitchFromGPU();
+    }
+    else if (ComputeLocation == "GPU")
+    {
+        M.SwitchToGPU();
     }
 }
 

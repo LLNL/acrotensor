@@ -652,4 +652,44 @@ void test_suite_on_engine(TensorEngine &TE)
          }         
       }
    }
+
+   SECTION("Scatters and Gathers")
+   {
+      Tensor TBIG(8);
+      Tensor T(6);
+      IndexMapping M(6,8);
+      int Marr[8] = {0,1,3,4,1,2,4,5};
+      for (int i = 0; i < 6; ++i)
+      {
+         T[i] = 2*i + 37;
+      }
+      for (int i = 0; i < 8; ++i)
+      {
+         M[i] = Marr[i];
+         TBIG[i] = 3*i - 5;
+      }
+
+      SECTION("FlatIndexedScatter")
+      {
+         TE.FlatIndexedScatter(TBIG, T, M);
+         TBIG.MoveFromGPU();
+         for (int i = 0; i < 8; ++i)
+         {
+            REQUIRE(TBIG[i] == Approx(T[M[i]]));
+         }
+      }
+
+      SECTION("FlatIndexedSumGather")
+      {
+         TE.FlatIndexedSumGather(T, TBIG, M);
+         REQUIRE(T[0] == Approx(TBIG[0]));
+         REQUIRE(T[1] == Approx(TBIG[1] + TBIG[4]));
+         REQUIRE(T[2] == Approx(TBIG[5]));
+         REQUIRE(T[3] == Approx(TBIG[2]));
+         REQUIRE(T[4] == Approx(TBIG[3] + TBIG[6]));
+         REQUIRE(T[5] == Approx(TBIG[7]));
+      }
+
+   }
+
 }

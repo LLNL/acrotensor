@@ -8,6 +8,7 @@
 
 #include <string>
 #include "Tensor.hpp"
+#include "IndexMapping.hpp"
 
 namespace acro
 {
@@ -16,9 +17,18 @@ namespace acro
 class NonContractionOps
 {
     public:
+    //Batched 1x1, 2x2, and 3x3 matrix inverses and determinents
+    //The last 2 indices are for the matrices and the rests are batched over
     virtual void BatchMatrixInverse(Tensor &Ainv, Tensor &A) = 0;
     virtual void BatchMatrixDet(Tensor &Adet, Tensor &A) = 0;
     virtual void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A) = 0;
+
+    //Aout[i] = Ain[I[i]]
+    virtual void FlatIndexedScatter(Tensor &Aout, Tensor &Ain, IndexMapping &M) = 0;
+
+    //Aout[:] = 0.0
+    //Aout[I[i]] += Ain[i]
+    virtual void FlatIndexedSumGather(Tensor &Aout, Tensor &Ain, IndexMapping &M) = 0;
 };
 
 }

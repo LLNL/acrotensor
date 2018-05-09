@@ -167,6 +167,9 @@ inline void CudaKernel::AddTextureData(int id, std::vector<T> &data)
 __global__ void CudaSet(double *d, double val, int N);
 __global__ void CudaMult(double *d, double c, int N);
 
+__device__ int2 CudaWarpSort(int2 val);
+__device__ int2 shfl_sync_int2(unsigned mask, int2 var, int srcLane, int width=32);
+
 #endif
 
 inline bool isCudaReady()

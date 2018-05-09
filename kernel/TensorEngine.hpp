@@ -10,6 +10,7 @@
 #include <string>
 #include "DimensionedMultiKernel.hpp"
 #include "Executor.hpp"
+#include "IndexMapping.hpp"
 
 #ifdef ACRO_HAVE_CUDA
 #include <cuda.h>
@@ -76,6 +77,8 @@ class TensorEngine
     void BatchMatrixInverse(Tensor &Ainv, Tensor &A);
     void BatchMatrixDet(Tensor &Adet, Tensor &A);
     void BatchMatrixInvDet(Tensor &Ainv, Tensor &Adet, Tensor &A);
+    void FlatIndexedScatter(Tensor &Aout, Tensor &Ait, IndexMapping &M);
+    void FlatIndexedSumGather(Tensor &Aout, Tensor &Ait, IndexMapping &M);
 
     void Clear();
     bool IsGPUAvailable() {return isCudaReady();}
@@ -86,8 +89,10 @@ class TensorEngine
     TensorKernel *GetAddTensorKernel(std::string &kernel_str);
     DimensionedKernel *GetAddDimensionedKernel(TensorKernel *kernel, Tensor *output, std::vector<Tensor*> &inputs);
     KernelExecutor *GetAddKernelExecutor();
-    void MoveTensorToComputeLocation(Tensor &T);
-    void SwitchTensorToComputeLocation(Tensor &T);
+    void MoveToComputeLocation(Tensor &T);
+    void SwitchToComputeLocation(Tensor &T);
+    void MoveToComputeLocation(IndexMapping &M);
+    void SwitchToComputeLocation(IndexMapping &M);
 
     std::string ExecutorType;
     std::unordered_map<std::string, TensorKernel*> KernelMap;
