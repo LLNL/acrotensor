@@ -586,7 +586,7 @@ std::string CudaExecutor::GenSubKernelLoops()
                 {
                     var_str = "hIN" + std::to_string(ivari);
                 }
-                else if (ki > 0 && uvari == MultiKernel->GetUVari(ki-1, -1))
+                else if (ki > 0 && SharedMemWRKernels[ki-1] && uvari == MultiKernel->GetUVari(ki-1, -1))
                 {
                     var_str = "SMWR[" + GenVarIndex(ki, ivari, blocki, false) + "]";
                 }

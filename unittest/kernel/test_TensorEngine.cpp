@@ -205,6 +205,25 @@ void test_suite_on_engine(TensorEngine &TE)
          }
       }
 
+      SECTION("MultiKernel Launch")
+      {
+         Tensor A(3);
+         Tensor B1(3), B2(3);
+         Tensor C(3,3);
+
+         B1(0) = 1.0; B1(1) = 2.0; B1(2) = 3.0;
+         B2.Set(1.0);
+         C.Set(1.0);
+         TE.BeginMultiKernelLaunch();
+         TE("A_i = B1_i", A, B1);
+         TE("A_i = C_i_j B2_j", A, C, B2);
+         TE.EndMultiKernelLaunch();
+         A.MoveFromGPU();
+         CHECK(A(0) == Approx(3.0));
+         CHECK(A(1) == Approx(3.0));
+         CHECK(A(2) == Approx(3.0));
+      }         
+
       SECTION("FE Type Contractions")
       {
          SECTION("2D Mass Matrix")
@@ -517,26 +536,56 @@ void test_suite_on_engine(TensorEngine &TE)
             }
             CHECK(DBadCount == 0);
          }
-      }
 
-      SECTION("MultiKernel Launch")
-      {
-         Tensor A(3);
-         Tensor B1(3), B2(3);
-         Tensor C(3,3);
+         SECTION("3D Stiffness Create D for partial Assembly (Order 4)")
+         {
+            Tensor D(10, 3, 3, 5, 5, 5);
+            Tensor Jinv(10, 5, 5, 5, 3, 3);
+            Tensor Jdet(10, 5, 5, 5);
+            Tensor C(10, 5, 5, 5);
+            Tensor W(5, 5, 5);
 
-         B1(0) = 1.0; B1(1) = 2.0; B1(2) = 3.0;
-         B2.Set(1.0);
-         C.Set(1.0);
-         TE.BeginMultiKernelLaunch();
-         TE("A_i = B1_i", A, B1);
-         TE("A_i = C_i_j B2_j", A, C, B2);
-         TE.EndMultiKernelLaunch();
-         A.MoveFromGPU();
-         CHECK(A(0) == Approx(3.0));
-         CHECK(A(1) == Approx(3.0));
-         CHECK(A(2) == Approx(3.0));
-      }      
+            for (int flatidx = 0; flatidx < D.GetSize(); ++flatidx)
+            {
+               Jinv[flatidx] = double(flatidx)+1.0;
+            }
+
+            for (int flatidx = 0; flatidx < C.GetSize(); ++flatidx)
+            {
+               C[flatidx] = double(flatidx)+2;
+               Jdet[flatidx] = double(flatidx)+3;
+               
+            }
+
+            for (int flatidx = 0; flatidx < W.GetSize(); ++flatidx)
+            {
+               W[flatidx] = double(flatidx) / 10.0;
+            }
+
+            TE("D_e_m_n_k1_k2_k3 = W_k1_k2_k3 C_e_k1_k2_k3 Jdet_e_k1_k2_k3 Jinv_e_k1_k2_k3_n_j Jinv_e_k1_k2_k3_m_j",
+                  D, W, C, Jdet, Jinv, Jinv);
+
+            //Intentionally flatttened whitespace
+            D.MoveFromGPU();
+            int DBadCount = 0;
+            for (int e = 0; e < 10; ++e)
+            for (int m = 0; m < 2; ++m)
+            for (int n = 0; n < 2; ++n)
+            for (int k1 = 0; k1 < 2; ++k1)
+            for (int k2 = 0; k2 < 2; ++k2)
+            for (int k3 = 0; k3 < 2; ++k3)
+            {
+               double sum = 0.0;
+               for (int j = 0; j < 3; ++j)
+               {
+                  sum += W(k1,k2,k3)*C(e,k1,k2,k3)*Jdet(e,k1,k2,k3)*Jinv(e,k1,k2,k3,m,j)*Jinv(e,k1,k2,k3,n,j);
+               }
+               if (!(D(e,m,n,k1,k2,k3) == Approx(sum)))
+                  DBadCount++;
+            }
+            CHECK(DBadCount == 0);
+         }
+      }   
    }
 
    SECTION("Batched Inverses/Determinents")
