@@ -96,7 +96,7 @@ class DimensionedMultiKernel
     int GetVarSize(int ki, int vari);
     int GetVarSize(int uvari);
 
-    //The highes loop number that the var varies by
+    //The highest loop number that the var varies by
     int GetVarLoopDepth(int ki, int vari);
 
     //The unique vars will be listed starting from 0..n for the unique outputs

@@ -32,17 +32,19 @@ class OneOutPerThreadExecutor : public KernelExecutor
     int GetMinMidIdxSize(int num_block_loops);
     int GetMaxMidIdxSize(int num_block_loops);
     int GetNumThreadsPerBlock(int num_block_loops);
-    std::vector<bool> GetSharedMemUvars();
-    std::vector<int> GetMidloopsOrder(int ki, std::vector<bool> &sharedmem_uvars);
+    void GetSharedMemUvars();
+    void GetSharedMemWRKernels();
+    std::vector<int> GetMidloopsOrder(int ki);
     std::vector<int> GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops);
 
-    std::string GenSharedMemPreload(std::vector<bool> &sharedmem_uvars);
+    std::string GenSharedMemPreload();
+    std::string GenSharedMemWRBuffer();
     std::string GenInitIndices();
-    std::string GenSubKernelLoops(std::vector<bool> &sharedmem_uvars);
+    std::string GenSubKernelLoops();
     std::string GenTensor(int ki, int vari);
     std::string GenTensor(int uvari);
     std::string GenMidLoopIndices(int ki, std::vector<int> &mid_loops, std::vector<int> &mid_loop_strides, int blocki = -1);
-    std::string GenVarIndex(int ki, int vari, int blocki = -1);
+    std::string GenVarIndex(int ki, int vari, int blocki = -1, bool blockdims=true);
     std::string GenVarSubIndex(int ki, int vari, int dimi, int blocki = -1);
     std::string GenLoopIndex(int ki, int loopi, int blocki = -1);
     
@@ -51,6 +53,12 @@ class OneOutPerThreadExecutor : public KernelExecutor
 
     int NumBlockLoops;
     double **HDeviceTensors;
+
+    int SharedMemAllocated;
+    int SMWRBufferSize;
+    std::vector<bool> SharedMemUvars;
+    std::vector<bool> SharedMemWRKernels;
+
     std::vector<void*> KernelParams;
 };
 
