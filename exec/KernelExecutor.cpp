@@ -110,9 +110,9 @@ KernelExecutor *KernelExecutor::Create(std::string exec_type, DimensionedMultiKe
         return new CPUInterpretedExecutor(multi_kernel);    
     }
 #ifdef ACRO_HAVE_CUDA    
-    if (exec_type == "OneOutPerThread")
+    if (exec_type == "Cuda")
     {
-        return new OneOutPerThreadExecutor(multi_kernel);
+        return new CudaExecutor(multi_kernel);
     }
 #endif
 

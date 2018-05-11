@@ -3,8 +3,8 @@
 //All rights reserved.
 //This file is part of Acrotensor. For details, see https://github.com/LLNL/acrotensor.
 
-#ifndef ACROBATIC_ONEOUTPERTHREAD_EXECUTOR_HPP
-#define ACROBATIC_ONEOUTPERTHREAD_EXECUTOR_HPP
+#ifndef ACROBATIC_CUDA_EXECUTOR_HPP
+#define ACROBATIC_CUDA_EXECUTOR_HPP
 
 #ifdef ACRO_HAVE_CUDA
 #include "KernelExecutor.hpp"
@@ -15,15 +15,15 @@
 namespace acro
 {
 
-class OneOutPerThreadExecutor : public KernelExecutor
+class CudaExecutor : public KernelExecutor
 {
     public:
-    OneOutPerThreadExecutor(DimensionedMultiKernel *multi_kernel);
-    ~OneOutPerThreadExecutor();
+    CudaExecutor(DimensionedMultiKernel *multi_kernel);
+    ~CudaExecutor();
     virtual void ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs);
     virtual void ExecuteMulti(std::vector<Tensor*> &output, std::vector<std::vector<Tensor*> > &inputs);
     virtual std::string GetImplementation();
-    virtual std::string GetExecType() {return "OneOutPerThread";}
+    virtual std::string GetExecType() {return "Cuda";}
 
     private:
     void GenerateCudaKernel();

@@ -57,7 +57,7 @@ S.SwitchToGPU();  //Indicate that the GPU has the fresh copy without copying the
 
 Tensor contractions can now be handled through a `TensorEngine` object.  Thesor engines can be initilized with different execution policies that can handle contractions on the CPU or GPU with different approaches.  The contraction string in the `[]` operator defines how the tensors will be indexed, multiplied and added.  The dimensions of the contraction operation are set by the dimensions of the tensors that are passed in via the `()` operator.  Any index that does not appear on the left hand side is sum across and contracted away in the ouput tensor.
 ```
-acro::TensorEngine TE("OneOutPerThread");  //Initilize the engine with the OneOutPerThread exec policy
+acro::TensorEngine TE("Cuda");  //Initilize the engine with the Cuda exec policy
 TE("S_i_j = A_n_i_j B_n", S, A, B);             //Contract on n and sum the 1000 matrices into 1
 TE("S_i_j = A_n_i_j", S, A);                    //Same result as before since n is still contracted
 

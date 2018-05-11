@@ -5,4 +5,4 @@
 
 #include "KernelExecutor.hpp"
 #include "CPUInterpretedExecutor.hpp"
-#include "OneOutPerThreadExecutor.hpp"
+#include "CudaExecutor.hpp"

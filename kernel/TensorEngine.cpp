@@ -69,11 +69,11 @@ void TensorEngine::SetExecutorType(const char *bare_exec_type)
 
 void TensorEngine::SetExecutorType(std::string &exec_type)
 {
-    ACROBATIC_ASSERT(exec_type == "OneOutPerThread" ||
+    ACROBATIC_ASSERT(exec_type == "Cuda" ||
                      exec_type == "CPUInterpreted",
                      "Unknown Executor type:  " + exec_type);
 #ifndef ACRO_HAVE_CUDA
-    ACROBATIC_ASSERT(exec_type != "OneOutPerThread", 
+    ACROBATIC_ASSERT(exec_type != "Cuda", 
                      "CUDA required for executor:  " + exec_type);
 #endif
 
@@ -86,7 +86,7 @@ void TensorEngine::SetExecutorType(std::string &exec_type)
         Ops = new NativeCPUOps();
     }
 #ifdef ACRO_HAVE_CUDA    
-    if (ExecutorType == "OneOutPerThread")
+    if (ExecutorType == "Cuda")
     {
         ComputeLocation = "GPU";
         Ops = new CudaGPUOps();

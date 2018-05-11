@@ -5,7 +5,7 @@
 
 #ifdef ACRO_HAVE_CUDA
 
-#include "OneOutPerThreadExecutor.hpp"
+#include "CudaExecutor.hpp"
 #include <algorithm>
 #include <set>
 #include <limits>
@@ -14,7 +14,7 @@ namespace acro
 {
 
 
-OneOutPerThreadExecutor::OneOutPerThreadExecutor(DimensionedMultiKernel *multi_kernel) : KernelExecutor(multi_kernel) 
+CudaExecutor::CudaExecutor(DimensionedMultiKernel *multi_kernel) : KernelExecutor(multi_kernel) 
 {
     HDeviceTensors = nullptr;
     SharedMemAllocated = 0;
@@ -22,7 +22,7 @@ OneOutPerThreadExecutor::OneOutPerThreadExecutor(DimensionedMultiKernel *multi_k
     GenerateCudaKernel();
 }
 
-OneOutPerThreadExecutor::~OneOutPerThreadExecutor()
+CudaExecutor::~CudaExecutor()
 {
     if (HDeviceTensors != nullptr)
     {
@@ -33,7 +33,7 @@ OneOutPerThreadExecutor::~OneOutPerThreadExecutor()
 }
 
 
-void OneOutPerThreadExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs)
+void CudaExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*> &inputs)
 {
     MoveTensorsToGPU(output, inputs);
 
@@ -66,7 +66,7 @@ void OneOutPerThreadExecutor::ExecuteSingle(Tensor *output, std::vector<Tensor*>
 }
 
 
-void OneOutPerThreadExecutor::ExecuteMulti(std::vector<Tensor*> &outputs, std::vector<std::vector<Tensor*> > &inputs)
+void CudaExecutor::ExecuteMulti(std::vector<Tensor*> &outputs, std::vector<std::vector<Tensor*> > &inputs)
 {
     for (int ki = 0; ki < MultiKernel->GetNumKernels(); ++ki)
     {
@@ -102,13 +102,13 @@ void OneOutPerThreadExecutor::ExecuteMulti(std::vector<Tensor*> &outputs, std::v
 }
 
 
-std::string OneOutPerThreadExecutor::GetImplementation()
+std::string CudaExecutor::GetImplementation()
 {
     return TheCudaKernel->Code;
 }
 
 
-void OneOutPerThreadExecutor::GenerateCudaKernel()
+void CudaExecutor::GenerateCudaKernel()
 {
     TheCudaKernel = new CudaKernel;
     TheCudaKernel->Code = 
@@ -131,7 +131,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
 
     "}\n";
 
-    ACROBATIC_ASSERT(MultiKernel->GetNumOuterIndices() > 0, "OneOutPerThreadExecutor needs at least 1 non-contraction index.");
+    ACROBATIC_ASSERT(MultiKernel->GetNumOuterIndices() > 0, "CudaExecutor needs at least 1 non-contraction index.");
 
     NumBlockLoops = GetNumBlockLoops();
 
@@ -190,7 +190,7 @@ void OneOutPerThreadExecutor::GenerateCudaKernel()
 }
 
 
-int OneOutPerThreadExecutor::GetNumBlockLoops()
+int CudaExecutor::GetNumBlockLoops()
 {
     int loopi;
     for (loopi = 0; loopi < MultiKernel->GetNumOuterIndices(); ++loopi)
@@ -204,7 +204,7 @@ int OneOutPerThreadExecutor::GetNumBlockLoops()
 }
 
 
-int OneOutPerThreadExecutor::GetMinMidIdxSize(int num_block_loops)
+int CudaExecutor::GetMinMidIdxSize(int num_block_loops)
 {
     int numloops = MultiKernel->GetNumIndices();
     int min_idx_size = std::numeric_limits<int>::max();
@@ -225,7 +225,7 @@ int OneOutPerThreadExecutor::GetMinMidIdxSize(int num_block_loops)
 }
 
 
-int OneOutPerThreadExecutor::GetMaxMidIdxSize(int num_block_loops)
+int CudaExecutor::GetMaxMidIdxSize(int num_block_loops)
 {
     int numloops = MultiKernel->GetNumIndices();
     int max_idx_size = -1;
@@ -246,7 +246,7 @@ int OneOutPerThreadExecutor::GetMaxMidIdxSize(int num_block_loops)
 }
 
 
-int OneOutPerThreadExecutor::GetNumThreadsPerBlock(int num_block_loops)
+int CudaExecutor::GetNumThreadsPerBlock(int num_block_loops)
 {
     int min = GetMinMidIdxSize(num_block_loops);
     int max = GetMaxMidIdxSize(num_block_loops);
@@ -262,7 +262,7 @@ int OneOutPerThreadExecutor::GetNumThreadsPerBlock(int num_block_loops)
     return block_size;
 }
 
-void OneOutPerThreadExecutor::GetSharedMemUvars()
+void CudaExecutor::GetSharedMemUvars()
 {
     int numuvars = MultiKernel->GetNumUVars();
     SharedMemUvars.resize(numuvars);
@@ -283,7 +283,7 @@ void OneOutPerThreadExecutor::GetSharedMemUvars()
     }
 }
 
-void OneOutPerThreadExecutor::GetSharedMemWRKernels()
+void CudaExecutor::GetSharedMemWRKernels()
 {
     int num_blocks_per_full_sm = CudaDeviceProp.maxThreadsPerMultiProcessor / TheCudaKernel->ThreadsPerBlock;
     int shared_mem_size = (CudaDeviceProp.sharedMemPerMultiprocessor / num_blocks_per_full_sm);
@@ -323,7 +323,7 @@ void OneOutPerThreadExecutor::GetSharedMemWRKernels()
 }
 
 
-std::vector<int> OneOutPerThreadExecutor::GetMidloopsOrder(int ki)
+std::vector<int> CudaExecutor::GetMidloopsOrder(int ki)
 {
     DimensionedKernel* kernel = MultiKernel->Kernels[ki];
     int numloops = MultiKernel->GetNumIndices();
@@ -375,7 +375,7 @@ std::vector<int> OneOutPerThreadExecutor::GetMidloopsOrder(int ki)
 }
 
 
-std::vector<int> OneOutPerThreadExecutor::GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops)
+std::vector<int> CudaExecutor::GetMidloopsStrides(DimensionedKernel *kernel, std::vector<int> &mid_loops)
 {
     //Generate the mid loops
     int nummidloops = mid_loops.size();
@@ -392,7 +392,7 @@ std::vector<int> OneOutPerThreadExecutor::GetMidloopsStrides(DimensionedKernel *
 }
 
 
-std::string OneOutPerThreadExecutor::GenSharedMemWRBuffer()
+std::string CudaExecutor::GenSharedMemWRBuffer()
 {
     std::string smwr_str;
     if (SMWRBufferSize > 0)
@@ -403,7 +403,7 @@ std::string OneOutPerThreadExecutor::GenSharedMemWRBuffer()
 }
 
 
-std::string OneOutPerThreadExecutor::GenSharedMemPreload()
+std::string CudaExecutor::GenSharedMemPreload()
 {
     //If applicable Generate the SM preload code for small tensors
     std::string preload_sm_str;
@@ -434,7 +434,7 @@ std::string OneOutPerThreadExecutor::GenSharedMemPreload()
 }
 
 
-std::string OneOutPerThreadExecutor::GenInitIndices()
+std::string CudaExecutor::GenInitIndices()
 {
     const std::vector<int> N = MultiKernel->GetLoopDims();
     int numloops = MultiKernel->GetNumIndices();
@@ -474,7 +474,7 @@ std::string OneOutPerThreadExecutor::GenInitIndices()
 
 
 
-std::string OneOutPerThreadExecutor::GenSubKernelLoops()
+std::string CudaExecutor::GenSubKernelLoops()
 {
     std::string kernel_loops_str;
     int numloops = MultiKernel->GetNumIndices();
@@ -617,7 +617,7 @@ std::string OneOutPerThreadExecutor::GenSubKernelLoops()
     return kernel_loops_str;
 }
 
-std::string OneOutPerThreadExecutor::GenMidLoopIndices(int ki, std::vector<int> &mid_loops, std::vector<int> &mid_loop_strides, int blocki)
+std::string CudaExecutor::GenMidLoopIndices(int ki, std::vector<int> &mid_loops, std::vector<int> &mid_loop_strides, int blocki)
 {
     DimensionedKernel *kernel = MultiKernel->Kernels[ki];
     std::string indices;
@@ -643,19 +643,19 @@ std::string OneOutPerThreadExecutor::GenMidLoopIndices(int ki, std::vector<int> 
 }
 
 
-std::string OneOutPerThreadExecutor::GenTensor(int ki, int vari)
+std::string CudaExecutor::GenTensor(int ki, int vari)
 {
     return GenTensor(MultiKernel->GetUVari(ki, vari));
 }
 
 
-std::string OneOutPerThreadExecutor::GenTensor(int uvari)
+std::string CudaExecutor::GenTensor(int uvari)
 {
     std::string tensor = "T" + std::to_string(uvari);
     return tensor;
 }
 
-std::string OneOutPerThreadExecutor::GenVarIndex(int ki, int vari, int blocki, bool blockdims)
+std::string CudaExecutor::GenVarIndex(int ki, int vari, int blocki, bool blockdims)
 {
     DimensionedKernel *kernel = MultiKernel->Kernels[ki];
     std::string index_str;
@@ -681,14 +681,14 @@ std::string OneOutPerThreadExecutor::GenVarIndex(int ki, int vari, int blocki, b
 }
 
 
-std::string OneOutPerThreadExecutor::GenVarSubIndex(int ki, int vari, int dimi, int blocki)
+std::string CudaExecutor::GenVarSubIndex(int ki, int vari, int dimi, int blocki)
 {
     DimensionedKernel *kernel = MultiKernel->Kernels[ki];   
     return GenLoopIndex(ki, kernel->GetVarDimLoopNum(vari, dimi), blocki);
 }
 
 
-std::string OneOutPerThreadExecutor::GenLoopIndex(int ki, int loopi, int blocki)
+std::string CudaExecutor::GenLoopIndex(int ki, int loopi, int blocki)
 {
     DimensionedKernel *kernel = MultiKernel->Kernels[ki];
     std::string loopidx = "I" + std::to_string(loopi);

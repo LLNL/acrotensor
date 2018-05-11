@@ -20,7 +20,7 @@ TEST_CASE("TensorEngine", "[TensorEngine]")
 
    if (isCudaReady()) 
    {
-      TensorEngine TE2("OneOutPerThread");
+      TensorEngine TE2("Cuda");
       test_suite_on_engine(TE2);
    } 
 }
