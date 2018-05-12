@@ -672,8 +672,8 @@ std::string CudaExecutor::GenVarIndex(int ki, int vari, int blocki, bool blockdi
 
             std::string loopidx = GenVarSubIndex(ki, vari, di, blocki);
             std::string stride = std::to_string(kernel->GetVarDimStride(vari, di));
-            index_str += "__umul24(" + loopidx + "," + stride + ")";
-            //index_str += loopidx + "*" + stride;
+            //index_str += "__umul24(" + loopidx + "," + stride + ")";
+            index_str += loopidx + "*" + stride;
             first = false;
         }           
     }
