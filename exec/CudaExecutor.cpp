@@ -118,7 +118,7 @@ void CudaExecutor::GenerateCudaKernel()
     "void <KERNEL_NAME>(<PARAMS>)\n"
     "{\n"
     "    double sum;\n"
-    "    const int outidx = blockIdx.x;\n"
+    "    const unsigned int outidx = blockIdx.x;\n"
     "\n"
         "<SMWR_BUFFER>"
     "\n"
@@ -452,7 +452,8 @@ std::string CudaExecutor::GenInitIndices()
     for (int loopd = 0; loopd < NumBlockLoops; ++loopd)
     {
         //I[loopd] = (outidx / (Wout[loopd]) % N[loopd];
-        init_indices_str += "    int I" + std::to_string(loopd) + " = ";
+        init_indices_str += "    unsigned int I";
+        init_indices_str += std::to_string(loopd) + " = ";
         if (Wout[loopd] == 1)
         {
             init_indices_str += "outidx";
