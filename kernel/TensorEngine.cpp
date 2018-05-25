@@ -289,6 +289,12 @@ void TensorEngine::operator()(std::string &kernel_str, Tensor &out, Tensor &in1,
 
 void TensorEngine::operator()(std::string &kernel_str, Tensor *output, std::vector<Tensor*> &inputs)
 {
+    ACROBATIC_ASSERT(output->IsInitialized(), "Output variable not initilized in:  " + kernel_str);
+    for (int ivari = 0; ivari < inputs.size(); ++ivari)
+    {
+        ACROBATIC_ASSERT(inputs[ivari]->IsInitialized(), "Input variable not initilized in:  " + kernel_str);
+    }
+
     if (!IsMultiKernelLaunch)
     {
         MKLKernels.resize(0);

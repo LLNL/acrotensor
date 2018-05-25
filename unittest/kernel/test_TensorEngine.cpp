@@ -37,10 +37,13 @@ void test_suite_on_engine(TensorEngine &TE)
       SECTION("Assert Compatible Dimensions")
       {
          Tensor T1out_3(3), T2out_3_3(3, 3), T1_3(3), T1_2(2), T2_3_3(3,3);
+         Tensor Tnoinit;
          REQUIRE_NOTHROW(TE("A_i=B_iC_i", T1out_3, T1_3, T1_3));
          REQUIRE_THROWS(TE("A_i=B_iC_i", T1out_3, T1_3, T1_2));
          REQUIRE_NOTHROW(TE("A_i=B_i_jC_i", T1out_3, T2_3_3, T1_3));
          REQUIRE_THROWS(TE("A_i=B_i_jC_i", T1out_3, T2_3_3, T1_2));
+         REQUIRE_THROWS(TE("A_i=B_i_jC_i", Tnoinit, T2_3_3, T1_2));
+         REQUIRE_THROWS(TE("A_i=B_i_jC_i", T1out_3, T2_3_3, Tnoinit));
       }
 
       SECTION("Basic computations")
