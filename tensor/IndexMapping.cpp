@@ -5,6 +5,7 @@
 
 #include "IndexMapping.hpp"
 #include <algorithm>
+#include <numeric>
 
 namespace acro
 {
@@ -36,7 +37,7 @@ void IndexMapping::ComputeInverse()
     {
         InvMOff[i] = off;
         if (off < RangeSize)
-        {       
+        {
             int m = M[InvM[off]];
             while (off < RangeSize && M[InvM[off]] == m)
             {
@@ -56,7 +57,7 @@ void IndexMapping::ComputeInverse()
         InvM.SwitchFromGPU();
         InvM.MoveToGPU();
         InvMOff.SwitchFromGPU();
-        InvMOff.MoveToGPU();        
+        InvMOff.MoveToGPU();
     }
 }
 
